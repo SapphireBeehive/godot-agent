@@ -66,6 +66,7 @@ jobs:
           file: ./image/Dockerfile
           platforms: linux/amd64
           push: false
+          load: true
           tags: claude-godot-agent:test
           build-args: |
             GODOT_VERSION=4.3

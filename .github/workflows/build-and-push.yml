@@ -100,7 +100,7 @@ jobs:
           build-args: |
             GODOT_VERSION=${{ env.GODOT_VERSION }}
             GODOT_RELEASE_TYPE=${{ env.GODOT_RELEASE_TYPE }}
-            GODOT_SHA256=${{ secrets.GODOT_SHA256 }}
+            GODOT_SHA256=${{ vars.GODOT_SHA256 }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
