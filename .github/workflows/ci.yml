@@ -1,0 +1,91 @@
+name: CI
+
+on:
+  pull_request:
+    branches:
+      - main
+  push:
+    branches:
+      - main
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    
+    permissions:
+      contents: read
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Validate Dockerfiles
+        uses: hadolint/hadolint-action@v3.1.0
+        with:
+          dockerfile: image/Dockerfile
+          failure-threshold: warning
+
+      - name: Validate compose files
+        run: |
+          cd compose
+          docker compose -f compose.base.yml config --quiet
+          docker compose -f compose.base.yml -f compose.direct.yml config --quiet
+          docker compose -f compose.base.yml -f compose.staging.yml config --quiet
+          docker compose -f compose.offline.yml config --quiet
+          echo "✓ All compose files are valid"
+
+      - name: Lint shell scripts
+        uses: ludeeus/action-shellcheck@2.0.0
+        with:
+          scandir: './scripts'
+          severity: warning
+
+      - name: Lint install scripts
+        uses: ludeeus/action-shellcheck@2.0.0
+        with:
+          scandir: './image/install'
+          severity: warning
+
+  build-test:
+    runs-on: ubuntu-latest
+    
+    permissions:
+      contents: read
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build image (no push)
+        uses: docker/build-push-action@v5
+        with:
+          context: ./image
+          file: ./image/Dockerfile
+          platforms: linux/amd64
+          push: false
+          tags: claude-godot-agent:test
+          build-args: |
+            GODOT_VERSION=4.3
+            GODOT_RELEASE_TYPE=stable
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Test container basics
+        run: |
+          docker run --rm claude-godot-agent:test bash -c "
+            echo '=== Container Test ==='
+            echo 'User:' \$(whoami)
+            echo 'Home:' \$HOME
+            echo 'Working dir:' \$(pwd)
+            echo ''
+            echo 'Checking for required tools...'
+            which bash && echo '✓ bash'
+            which git && echo '✓ git'
+            which node && echo '✓ node' || echo '⚠ node not found'
+            echo ''
+            echo '=== Test Complete ==='
+          "
+

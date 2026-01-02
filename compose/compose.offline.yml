@@ -1,0 +1,56 @@
+# compose.offline.yml - Completely offline agent (emergency mode)
+# Use with: docker compose -f compose.offline.yml up
+#
+# This mode provides ZERO network access - not even to allowlisted domains.
+# Use for maximum isolation when reviewing suspicious code or testing.
+
+services:
+  agent:
+    build:
+      context: ../image
+      dockerfile: Dockerfile
+      args:
+        - GODOT_VERSION=${GODOT_VERSION:-4.3}
+        - GODOT_RELEASE_TYPE=${GODOT_RELEASE_TYPE:-stable}
+        - GODOT_SHA256=${GODOT_SHA256:-}
+    image: claude-godot-agent:latest
+    container_name: agent_offline
+    stdin_open: true
+    tty: true
+    
+    # Environment - no API key needed in offline mode
+    environment:
+      - HOME=/home/claude
+      - USER=claude
+      - OFFLINE_MODE=true
+    
+    # No network at all
+    network_mode: none
+    
+    # Mount project (can be direct or staging)
+    volumes:
+      - ${PROJECT_PATH:-./../project}:/project:rw
+    
+    # Security hardening
+    read_only: true
+    tmpfs:
+      - /tmp:size=100M,mode=1777
+      - /home/claude:size=50M,mode=0755
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    pids_limit: 256
+    
+    # Resource limits
+    deploy:
+      resources:
+        limits:
+          memory: ${AGENT_MEMORY_LIMIT:-2G}
+          cpus: "${AGENT_CPU_LIMIT:-2.0}"
+        reservations:
+          memory: 256M
+    
+    # Working directory
+    working_dir: /project
+

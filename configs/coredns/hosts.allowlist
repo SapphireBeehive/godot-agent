@@ -1,0 +1,26 @@
+# Allowlist hosts file for DNS filtering
+# Format: <proxy_ip> <hostname>
+# 
+# These hostnames resolve to their respective proxy container IPs
+# The proxy containers handle the actual connection to the internet
+
+# GitHub (code hosting, git operations)
+# proxy_github container IP (will be resolved by Docker DNS)
+10.100.1.10 github.com
+10.100.1.10 www.github.com
+
+# GitHub raw content (for fetching raw files)
+10.100.1.11 raw.githubusercontent.com
+
+# GitHub codeload (for downloading archives/zips)
+10.100.1.12 codeload.github.com
+
+# Godot documentation
+10.100.1.13 docs.godotengine.org
+
+# Anthropic API (for Claude Code)
+10.100.1.14 api.anthropic.com
+
+# Note: These IPs are static assignments within the sandbox_net
+# They must match the ipv4_address settings in compose.base.yml
+

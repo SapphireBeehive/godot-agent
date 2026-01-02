@@ -1,16 +1,49 @@
-# Godot 4+ specific ignores
+# Environment files (contain secrets)
+.env
+.env.local
+.env.*.local
+
+# Logs
+logs/
+*.log
+
+# Staging directories
+staging/
+
+# Docker
+.docker/
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# Temporary files
+*.tmp
+*.temp
+tmp/
+temp/
+
+# Build artifacts
+build/
+dist/
+
+# Godot
 .godot/
-.nomedia
+*.import
 
-# Godot-specific ignores
-.import/
-export.cfg
-export_credentials.cfg
+# Node (if Claude Code uses npm)
+node_modules/
 
-# Imported translations (automatically generated from CSV files)
-*.translation
-
-# Mono-specific ignores
-.mono/
-data_*/
-mono_crash.*.json
+# Python (if any scripts use Python)
+__pycache__/
+*.pyc
+.venv/
+venv/

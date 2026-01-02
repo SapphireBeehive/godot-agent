@@ -1,0 +1,43 @@
+# CoreDNS Configuration for Claude-Godot Sandbox
+# Implements DNS allowlisting: returns proxy IPs for allowed domains,
+# NXDOMAIN for everything else.
+
+# Main zone - handles all queries
+. {
+    # Enable query logging for observability
+    # All queries (allowed and blocked) are logged
+    log {
+        class all
+    }
+    
+    # Error logging
+    errors
+    
+    # Health check endpoint
+    health :8080
+    
+    # Ready check endpoint  
+    ready :8181
+    
+    # Prometheus metrics (optional, useful for monitoring)
+    # prometheus :9153
+    
+    # Load hosts file for allowlist mappings
+    hosts /etc/coredns/hosts.allowlist {
+        fallthrough
+    }
+    
+    # Template for NXDOMAIN responses (blocks everything not in allowlist)
+    # This catches any query that didn't match the hosts file
+    template IN A {
+        rcode NXDOMAIN
+    }
+    
+    template IN AAAA {
+        rcode NXDOMAIN
+    }
+    
+    # Cache responses (helps with performance)
+    cache 60
+}
+
