@@ -37,32 +37,26 @@ if [[ "${1:-}" == "--no-cache" ]]; then
 fi
 
 # Default values
-GODOT_VERSION="${GODOT_VERSION:-4.3}"
-GODOT_RELEASE_TYPE="${GODOT_RELEASE_TYPE:-stable}"
+GODOT_VERSION="${GODOT_VERSION:-4.6}"
+GODOT_RELEASE_TYPE="${GODOT_RELEASE_TYPE:-beta1}"
 
 log_info "Building Claude-Godot Agent image"
 echo ""
 echo "Configuration:"
 echo "  GODOT_VERSION:      $GODOT_VERSION"
 echo "  GODOT_RELEASE_TYPE: $GODOT_RELEASE_TYPE"
-echo "  GODOT_SHA256:       ${GODOT_SHA256:-NOT SET}"
+echo "  GODOT_SHA256:       ${GODOT_SHA256:-(not set - verification skipped)}"
 echo ""
 
-# Warn about missing checksum
+# Info about missing checksum (optional, not required)
 if [[ -z "${GODOT_SHA256:-}" ]]; then
-    log_warn "GODOT_SHA256 is not set!"
-    log_warn "The Godot download will fail during build."
-    log_warn ""
-    log_warn "To get the checksum:"
-    log_warn "  1. Download Godot from https://godotengine.org/download/server/"
-    log_warn "  2. Run: sha256sum <downloaded_file>"
-    log_warn "  3. Export: export GODOT_SHA256=<checksum>"
-    log_warn ""
-    read -rp "Continue anyway? (build will likely fail) [y/N] " response
-    if [[ ! "$response" =~ ^[Yy]$ ]]; then
-        log_info "Aborted."
-        exit 0
-    fi
+    log_warn "GODOT_SHA256 not set - checksum verification will be skipped"
+    echo ""
+    echo "For production builds, set the SHA256 for Godot ${GODOT_VERSION}-${GODOT_RELEASE_TYPE}:"
+    echo "  1. Download: https://github.com/godotengine/godot/releases/download/${GODOT_VERSION}-${GODOT_RELEASE_TYPE}/"
+    echo "  2. Get hash: sha256sum Godot_v${GODOT_VERSION}-${GODOT_RELEASE_TYPE}_linux.x86_64.zip"
+    echo "  3. Build:    GODOT_SHA256=<hash> make build"
+    echo ""
 fi
 
 log_info "Building image..."

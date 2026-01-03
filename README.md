@@ -502,15 +502,18 @@ Recommended workflow for hybrid local/cloud development:
 
 ### Common Issues
 
-**"GODOT_SHA256 is not set"** (warning, not error)
+**"GODOT_SHA256 not set - checksum verification will be skipped"** (warning, not error)
 
-The build will proceed without checksum verification. To enable verification:
+The build will proceed without checksum verification. SHA256 is optional but recommended for production. Note: The checksum is **version-specific** - each Godot version has a different hash.
+
 ```bash
-# Download Godot and get checksum
-curl -LO https://github.com/godotengine/godot/releases/download/4.6-beta1/Godot_v4.6-beta1_linux.x86_64.zip
-sha256sum Godot_v4.6-beta1_linux.x86_64.zip
-# Add to .env: GODOT_SHA256=<the_checksum>
-# Or add as GitHub variable for CI builds
+# Get checksum for the specific version you're building
+VERSION="4.6-beta1"  # Change to match your GODOT_VERSION-GODOT_RELEASE_TYPE
+curl -LO "https://github.com/godotengine/godot/releases/download/${VERSION}/Godot_v${VERSION}_linux.x86_64.zip"
+sha256sum "Godot_v${VERSION}_linux.x86_64.zip"
+
+# Build with checksum verification
+GODOT_SHA256=<the_checksum> make build
 ```
 
 **"Docker daemon is not running"**

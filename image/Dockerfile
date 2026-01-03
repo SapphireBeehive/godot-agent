@@ -3,12 +3,12 @@
 # Target: Linux arm64 (Apple Silicon via Docker)
 
 # Build arguments for version pinning
-ARG GODOT_VERSION=4.3
-ARG GODOT_RELEASE_TYPE=stable
+ARG GODOT_VERSION=4.6
+ARG GODOT_RELEASE_TYPE=beta1
+# GODOT_SHA256 is optional - version-specific, skipped if not set
 ARG GODOT_SHA256
 
-# TODO: When Godot 4.6 is released, update GODOT_VERSION
-# TODO: Native arm64 Godot builds may require building from source
+# NOTE: Native arm64 Godot builds may require building from source
 
 # --- Stage 1: Build/Download dependencies ---
 FROM debian:bookworm-slim AS builder
