@@ -49,4 +49,8 @@ __pycache__/
 .venv/
 venv/
 
+# Test artifacts
+tests/.test-project/
+.pytest_cache/
+
 notes/

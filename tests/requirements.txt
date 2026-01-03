@@ -1,0 +1,7 @@
+# Test dependencies for Claude-Godot Sandbox security tests
+# Install with: uv pip install -r tests/requirements.txt
+pytest>=8.0.0
+docker>=7.0.0
+pytest-xdist>=3.5.0  # Parallel test execution
+pytest-timeout>=2.3.0  # Timeout for stuck tests
+

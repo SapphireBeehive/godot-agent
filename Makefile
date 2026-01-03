@@ -6,7 +6,8 @@
 .PHONY: help build up down doctor logs clean run-direct run-staging run-offline \
         run-godot promote diff-review scan logs-report shell test validate \
         build-no-cache restart status ci ci-validate ci-build ci-list ci-dry-run \
-        auth auth-status auth-setup-token install-hooks
+        auth auth-status auth-setup-token install-hooks \
+        test-security test-dns test-network test-hardening test-filesystem test-offline
 
 # Default target
 .DEFAULT_GOAL := help
@@ -221,9 +222,57 @@ clean-images: ## Remove agent images
 # DEVELOPMENT
 #==============================================================================
 
-test: doctor validate ## Run all checks
+test: doctor validate ## Run all checks (not security tests)
 	@echo ""
-	@echo "All tests passed!"
+	@echo "All validation checks passed!"
+	@echo "Run 'make test-security' for security tests (requires Docker)"
+
+#==============================================================================
+# SECURITY TESTS
+#==============================================================================
+
+test-security: _check-docker build ## Run all security tests
+	@echo "Running security tests..."
+	@cd tests && python3 -m pytest -v --tb=short
+
+test-security-parallel: _check-docker build ## Run security tests in parallel
+	@echo "Running security tests in parallel..."
+	@cd tests && python3 -m pytest -v --tb=short -n auto
+
+test-dns: _check-docker ## Run DNS filtering tests only
+	@echo "Running DNS filtering tests..."
+	@cd tests && python3 -m pytest test_dns_filtering.py -v
+
+test-network: _check-docker ## Run network restriction tests only
+	@echo "Running network restriction tests..."
+	@cd tests && python3 -m pytest test_network_restrictions.py -v
+
+test-hardening: _check-docker ## Run container hardening tests only
+	@echo "Running container hardening tests..."
+	@cd tests && python3 -m pytest test_container_hardening.py -v
+
+test-filesystem: _check-docker ## Run filesystem restriction tests only
+	@echo "Running filesystem restriction tests..."
+	@cd tests && python3 -m pytest test_filesystem_restrictions.py -v
+
+test-offline: _check-docker ## Run offline mode tests only
+	@echo "Running offline mode tests..."
+	@cd tests && python3 -m pytest test_offline_mode.py -v
+
+_check-docker:
+	@if ! docker info >/dev/null 2>&1; then \
+		echo "Error: Docker is not running"; \
+		exit 1; \
+	fi
+	@if ! python3 -c "import pytest" 2>/dev/null; then \
+		echo "Error: pytest not installed"; \
+		echo "Install with: pip install -r tests/requirements.txt"; \
+		exit 1; \
+	fi
+
+#==============================================================================
+# DEVELOPMENT (continued)
+#==============================================================================
 
 lint-scripts: ## Lint shell scripts with shellcheck
 	@if command -v shellcheck >/dev/null 2>&1; then \
