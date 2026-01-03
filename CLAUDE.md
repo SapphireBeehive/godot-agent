@@ -11,6 +11,8 @@ The sandbox isolates Claude Code in a container with:
 
 This protects against Claude accidentally (or maliciously) accessing sensitive data or making unwanted network connections.
 
+**Permissions**: Claude Code runs with all permissions pre-granted (file edits, command execution, etc.) since security is enforced by the container sandbox, not by Claude's internal permission system. See `image/config/claude-settings.json` for the full list.
+
 ## Pre-built Image
 
 The agent image is automatically built and pushed to GitHub Container Registry:
@@ -411,7 +413,12 @@ godot-agent/
 │   └── nginx/               # TCP proxy configurations
 ├── image/
 │   ├── Dockerfile           # Agent container image
-│   └── install/             # Installation scripts for Godot and Claude Code
+│   ├── config/
+│   │   └── claude-settings.json  # Claude Code permissions (all granted)
+│   ├── install/             # Installation scripts for Godot and Claude Code
+│   └── scripts/
+│       ├── entrypoint.sh    # Container entrypoint (sets up Claude config)
+│       └── queue-watcher.js # Async task queue processor
 ├── scripts/                 # Operational scripts (run from host)
 ├── tests/                   # Security test suite (pytest)
 │   ├── conftest.py          # Docker Compose fixtures

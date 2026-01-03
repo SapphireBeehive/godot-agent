@@ -501,6 +501,19 @@ docker compose -f compose/compose.base.yml logs -f dnsfilter
 4. **Persistence**: Read-only rootfs, tmpfs for writable areas
 5. **Resource exhaustion**: Memory/CPU limits, PID limits
 
+### Claude Code Permissions
+
+Claude Code has its own permission system that normally requires user approval for file edits, command execution, etc. Since security in this sandbox is enforced by **container isolation** (network allowlisting, filesystem restrictions, dropped capabilities), Claude is pre-configured with all permissions granted.
+
+This is configured in `image/config/claude-settings.json` and applied automatically on container start via the entrypoint script. The granted permissions include:
+
+- **Bash(*)**: Execute any shell command
+- **Read(*), Write(*), Edit(*)**: Full file access within `/project`
+- **WebFetch(*)**: Network requests (constrained by DNS allowlist)
+- **mcp__***: MCP tool integrations
+
+This approach means Claude can work autonomously without permission prompts, while the container sandbox enforces the actual security boundary.
+
 ### What This Does NOT Protect Against
 
 1. **Malicious code in project**: If Claude writes malicious GDScript, the Godot Editor on host could execute it
@@ -753,9 +766,14 @@ godot-agent/
 │       └── proxy_*.conf      # TCP proxy configs
 ├── image/
 │   ├── Dockerfile            # Agent container image
-│   └── install/
-│       ├── fetch_godot.sh    # Godot download + verification
-│       └── install_claude_code.sh
+│   ├── config/
+│   │   └── claude-settings.json  # Claude Code permissions (all granted)
+│   ├── install/
+│   │   ├── fetch_godot.sh    # Godot download + verification
+│   │   └── install_claude_code.sh
+│   └── scripts/
+│       ├── entrypoint.sh     # Container entrypoint (sets up Claude config)
+│       └── queue-watcher.js  # Async task queue processor
 ├── scripts/
 │   ├── run-claude.sh         # Main entry point
 │   ├── run-godot.sh          # Godot headless runner

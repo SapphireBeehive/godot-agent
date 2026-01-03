@@ -172,6 +172,53 @@ grep -rn "load\|preload.*\.gd" --include="*.gd" /path/to/project
 3. **Run the security scan**
 4. **Don't run unknown scripts** without review
 
+## Claude Code Permissions
+
+Claude Code has its own internal permission system that normally requires user approval for file operations, command execution, etc. In this sandbox, **all Claude Code permissions are pre-granted**.
+
+### Why?
+
+Security is enforced at the **container level**, not by Claude's internal permission system:
+
+| Layer | Enforcement |
+|-------|-------------|
+| Network access | DNS allowlist + proxy architecture |
+| Filesystem access | Container volume mounts (only `/project`) |
+| Privilege escalation | Dropped capabilities, no-new-privileges |
+| Resource usage | Memory/CPU/PID limits |
+
+Claude's internal permissions would be redundant and would prevent autonomous operation in non-interactive modes (queue processing, single prompts).
+
+### Configuration
+
+The permissions are defined in `image/config/claude-settings.json`:
+
+```json
+{
+  "permissions": {
+    "allow": [
+      "Bash(*)",
+      "Read(*)",
+      "Write(*)",
+      "Edit(*)",
+      "WebFetch(*)",
+      "mcp__*"
+    ]
+  }
+}
+```
+
+This file is copied to `~/.claude/settings.json` on container start via `image/scripts/entrypoint.sh`.
+
+### Security Implication
+
+- Claude can execute any command without prompts
+- All file operations are allowed (within `/project`)
+- Network requests work (constrained by DNS allowlist)
+- **This is safe because the container sandbox enforces the real boundaries**
+
+If you need stricter control, use the container-level restrictions (e.g., offline mode, staging mode) rather than relying on Claude's internal permissions.
+
 ## Container Hardening Details
 
 ### Applied Security Measures

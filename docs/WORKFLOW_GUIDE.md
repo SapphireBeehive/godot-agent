@@ -96,6 +96,15 @@ docker tag ghcr.io/sapphirebeehive/claude-godot-agent:latest claude-godot-agent:
 make doctor
 ```
 
+### Note: Claude Permissions
+
+Claude Code runs with **all permissions pre-granted** inside the sandbox. This means:
+- No permission prompts for file edits, command execution, etc.
+- Claude can work autonomously on tasks
+- Security is enforced by the container sandbox (network allowlist, filesystem restrictions, dropped capabilities), not by Claude's internal permission system
+
+This is configured in `image/config/claude-settings.json` and applied automatically on container start.
+
 ---
 
 ## Persistent Mode (Interactive Development)
