@@ -36,7 +36,10 @@ FROM debian:bookworm-slim AS runtime
 # Labels for image metadata
 LABEL org.opencontainers.image.title="Claude-Godot Sandbox Agent"
 LABEL org.opencontainers.image.description="Sandboxed environment for Claude Code + Godot development"
-LABEL org.opencontainers.image.source="https://github.com/your-org/claude-godot-sandbox"
+LABEL org.opencontainers.image.source="https://github.com/SapphireBeehiveStudios/godot-agent"
+
+# Use bash with pipefail for proper error handling in piped commands
+SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 
 # Install all runtime dependencies in a single layer
 # This layer will be cached unless dependencies change

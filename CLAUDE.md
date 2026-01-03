@@ -47,7 +47,7 @@ This protects against Claude accidentally (or maliciously) accessing sensitive d
 
 The agent image is automatically built and pushed to GitHub Container Registry:
 ```text
-ghcr.io/sapphirebeehive/claude-godot-agent
+ghcr.io/sapphirebeehivestudios/claude-godot-agent
 ```
 
 ### Available Tags
@@ -781,9 +781,9 @@ When initializing this repo from scratch, follow this exact sequence:
 3. **Verify authentication**: `make auth` (token should be in `.env`)
 4. **Pull pre-built image** (skip building locally):
    ```bash
-   docker pull ghcr.io/sapphirebeehive/claude-godot-agent:latest
-   docker tag ghcr.io/sapphirebeehive/claude-godot-agent:latest claude-godot-agent:latest
-   docker tag ghcr.io/sapphirebeehive/claude-godot-agent:latest claude-godot-agent:4.6
+   docker pull ghcr.io/sapphirebeehivestudios/claude-godot-agent:latest
+   docker tag ghcr.io/sapphirebeehivestudios/claude-godot-agent:latest claude-godot-agent:latest
+   docker tag ghcr.io/sapphirebeehivestudios/claude-godot-agent:latest claude-godot-agent:4.6
    ```
 5. **Start infrastructure**: `./scripts/up.sh`
 6. **Verify services**: `make status`
@@ -899,8 +899,8 @@ socket.connect(80, '8.8.8.8', () => console.log('CONNECTED'));
 
 ```bash
 # Do this:
-docker pull ghcr.io/sapphirebeehive/claude-godot-agent:latest
-docker tag ghcr.io/sapphirebeehive/claude-godot-agent:latest claude-godot-agent:latest
+docker pull ghcr.io/sapphirebeehivestudios/claude-godot-agent:latest
+docker tag ghcr.io/sapphirebeehivestudios/claude-godot-agent:latest claude-godot-agent:latest
 
 # Not this:
 make build  # ← Only needed if modifying the Dockerfile

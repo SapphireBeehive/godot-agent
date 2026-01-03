@@ -6,7 +6,7 @@
 #   /opt/scripts/clone-repo.sh https://github.com/owner/repo.git [target-directory]
 #
 # Examples:
-#   /opt/scripts/clone-repo.sh SapphireBeehive/godot-agent
+#   /opt/scripts/clone-repo.sh SapphireBeehiveStudios/godot-agent
 #   /opt/scripts/clone-repo.sh myorg/myrepo /project/my-repo
 
 set -euo pipefail

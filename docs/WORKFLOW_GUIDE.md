@@ -85,8 +85,8 @@ echo 'ANTHROPIC_API_KEY=your-key-here' >> .env
 make build
 
 # Or pull pre-built image
-docker pull ghcr.io/sapphirebeehive/claude-godot-agent:latest
-docker tag ghcr.io/sapphirebeehive/claude-godot-agent:latest claude-godot-agent:latest
+docker pull ghcr.io/sapphirebeehivestudios/claude-godot-agent:latest
+docker tag ghcr.io/sapphirebeehivestudios/claude-godot-agent:latest claude-godot-agent:latest
 ```
 
 ### 4. Environment Check
