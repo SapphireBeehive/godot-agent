@@ -368,3 +368,203 @@ This configures git to use `.githooks/pre-commit` which blocks commits containin
 | Auth errors | `make auth` to diagnose |
 | CI failing locally | `make ci-dry-run` to debug |
 | Compose validation errors | `make validate` to see details |
+| Proxy containers restarting | Check nginx configs, see Lessons Learned below |
+
+---
+
+## Lessons Learned (For Future Claude Instances)
+
+### Initial Setup Sequence
+
+When initializing this repo from scratch, follow this exact sequence:
+
+1. **Check Docker is running**: `docker ps`
+2. **Run environment check**: `make doctor`
+3. **Verify authentication**: `make auth` (token should be in `.env`)
+4. **Pull pre-built image** (skip building locally):
+   ```bash
+   docker pull ghcr.io/sapphirebeehive/claude-godot-agent:latest
+   docker tag ghcr.io/sapphirebeehive/claude-godot-agent:latest claude-godot-agent:latest
+   docker tag ghcr.io/sapphirebeehive/claude-godot-agent:latest claude-godot-agent:4.3
+   ```
+5. **Start infrastructure**: `./scripts/up.sh`
+6. **Verify services**: `make status`
+
+### Critical Issue #1: Nginx Stream Proxy Configuration
+
+**Problem**: Nginx proxy containers crash-loop on startup with error:
+```
+nginx: [emerg] "location" directive is not allowed here in /etc/nginx/conf.d/default.conf:8
+```
+
+**Root Cause**: The `nginx:1.25-alpine` image includes a default HTTP configuration file at `/etc/nginx/conf.d/default.conf`. Our `nginx.conf` uses a `stream {}` block that includes all `*.conf` files from that directory. Stream context doesn't allow HTTP directives like `location`.
+
+**Solution**: Mount an empty file over the default config for each proxy service:
+
+```yaml
+# In compose/compose.base.yml
+proxy_github:
+  volumes:
+    - ../configs/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+    - ../configs/nginx/proxy_github.conf:/etc/nginx/conf.d/stream.conf:ro
+    - ../configs/nginx/empty.conf:/etc/nginx/conf.d/default.conf:ro  # ← Add this
+```
+
+Create `configs/nginx/empty.conf`:
+```bash
+echo '# Empty file to prevent default nginx HTTP config' > configs/nginx/empty.conf
+```
+
+**Apply to all 5 proxy services**: `proxy_github`, `proxy_raw_githubusercontent`, `proxy_codeload_github`, `proxy_godot_docs`, `proxy_anthropic_api`
+
+### Critical Issue #2: CoreDNS Healthcheck Failures
+
+**Problem**: DNS filter shows as `(unhealthy)` in `docker ps`
+
+**Root Cause**: The CoreDNS image (`coredns/coredns:1.11.1`) is minimal/distroless and lacks common utilities:
+- No `wget` (original healthcheck tried to use this)
+- No `curl`
+- No `ps`
+- No `ls`
+- Not even basic shell utilities
+
+**Attempted Solutions That Failed**:
+1. ✗ `wget -q -O - http://localhost:8080/health` - wget not found
+2. ✗ `/dev/tcp/localhost/8080` - requires bash, not available in sh
+3. ✗ `ps aux | grep coredns` - ps not found
+
+**Working Solution**: Disable healthcheck entirely
+
+The CoreDNS image is so minimal that healthchecks are impractical. CoreDNS is simple enough that if the container is running, it's working:
+
+```yaml
+# In compose/compose.base.yml
+dnsfilter:
+  # ... other config ...
+  # Note: CoreDNS image is minimal (distroless), healthcheck disabled
+```
+
+**Verification**: Check logs show CoreDNS started:
+```bash
+docker compose -f compose/compose.base.yml logs dnsfilter
+# Should show: "CoreDNS-1.11.1" and "linux/arm64, go1.20.7"
+```
+
+### Critical Issue #3: Don't Build Locally, Use Pre-built Image
+
+**Problem**: Running `make build` fails with GODOT_SHA256 errors
+
+**Why This Happens**: The build process needs:
+- Exact SHA256 checksum of the Godot binary
+- The checksum isn't in the repo (intentionally - it changes per Godot version)
+- Godot doesn't provide official ARM64 Linux server builds (requires x86_64)
+
+**Better Solution**: Pull from GitHub Container Registry instead of building:
+
+```bash
+# Do this:
+docker pull ghcr.io/sapphirebeehive/claude-godot-agent:latest
+docker tag ghcr.io/sapphirebeehive/claude-godot-agent:latest claude-godot-agent:latest
+
+# Not this:
+make build  # ← Only needed if modifying the Dockerfile
+```
+
+The CI/CD pipeline builds multi-arch images (amd64 + arm64) automatically on push to main.
+
+### Restart Services After Config Changes
+
+After editing any `compose/*.yml` files or `configs/` files:
+
+```bash
+# Full path needed if not in repo root
+cd /Users/williamdawson/development/godot-agent
+./scripts/down.sh
+./scripts/up.sh
+```
+
+Or from repo root:
+```bash
+make restart  # Uses scripts/down.sh && scripts/up.sh
+```
+
+### Working Directory Matters
+
+Some commands require being in the repository root:
+- `make` targets work from anywhere (they use absolute paths)
+- Direct script execution needs full path or `cd` first:
+  ```bash
+  # Either:
+  cd /Users/williamdawson/development/godot-agent && ./scripts/up.sh
+
+  # Or:
+  /Users/williamdawson/development/godot-agent/scripts/up.sh
+  ```
+
+### Verifying Successful Initialization
+
+All these should be true:
+
+```bash
+# 1. Image exists locally
+docker images | grep claude-godot-agent
+# Should show: claude-godot-agent  latest  ...
+#              claude-godot-agent  4.3     ...
+
+# 2. All 6 services running
+make status
+# Should show 6 containers: dnsfilter + 5 proxies, all "Up"
+
+# 3. Proxies are healthy (may take 30s for healthchecks)
+make status | grep healthy
+# Should show at least proxy_github as healthy
+
+# 4. CoreDNS logs show startup
+docker compose -f compose/compose.base.yml logs dnsfilter
+# Should show "CoreDNS-1.11.1" without errors
+```
+
+### Network Architecture Reminder
+
+```
+┌─────────────────────────────────────────────────────────┐
+│  sandbox_net (10.100.1.0/24) - INTERNAL, NO INTERNET    │
+│                                                          │
+│  ┌──────────────┐                  ┌─────────────────┐  │
+│  │  dnsfilter   │◄────DNS─────────│  agent (future) │  │
+│  │  10.100.1.2  │                  │  10.100.1.100   │  │
+│  └──────────────┘                  └─────────────────┘  │
+│         │                                    │           │
+│         │ returns proxy IPs                 │           │
+│         ▼                                    │           │
+│  10.100.1.10  proxy_github        ◄──────────┤           │
+│  10.100.1.11  proxy_raw_githubusercontent   │           │
+│  10.100.1.12  proxy_codeload_github          │           │
+│  10.100.1.13  proxy_godot_docs               │           │
+│  10.100.1.14  proxy_anthropic_api            │           │
+│         │                                                │
+└─────────┼────────────────────────────────────────────────┘
+          │ egress_net - HAS INTERNET
+          ▼
+     INTERNET (github.com, api.anthropic.com, etc.)
+```
+
+- Agent can only reach IPs on `sandbox_net`
+- DNS filter returns proxy IPs for allowed domains, NXDOMAIN for everything else
+- Proxies bridge `sandbox_net` ↔ `egress_net` ↔ Internet
+- Agent cannot reach egress_net directly
+
+### Expected Service States
+
+After successful `make up`:
+
+| Service | Status | Notes |
+|---------|--------|-------|
+| dnsfilter | Up | May show unhealthy (expected, no healthcheck) |
+| proxy_github | Up (healthy) | Has healthcheck with nginx -t |
+| proxy_raw_githubusercontent | Up | No healthcheck configured |
+| proxy_codeload_github | Up | No healthcheck configured |
+| proxy_godot_docs | Up | No healthcheck configured |
+| proxy_anthropic_api | Up | No healthcheck configured |
+
+Only `proxy_github` has a healthcheck (`nginx -t`). Others are simple enough that if they're running, they work.
