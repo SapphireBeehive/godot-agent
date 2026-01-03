@@ -96,6 +96,15 @@ RUN mkdir -p /project && chown claude:claude /project
 RUN mkdir -p /home/claude/.config && \
     chown -R claude:claude /home/claude
 
+# Install Claude Code settings (copied to home dir at runtime via entrypoint)
+# These settings grant all permissions since security is enforced by container isolation
+RUN mkdir -p /etc/claude
+COPY config/claude-settings.json /etc/claude/settings.json
+
+# Install entrypoint script (sets up Claude config on each container start)
+COPY scripts/entrypoint.sh /usr/local/bin/entrypoint.sh
+RUN chmod +x /usr/local/bin/entrypoint.sh
+
 # Security: Remove package managers and unnecessary tools from runtime path
 # Note: We keep npm for Claude Code but could remove it post-install if needed
 # RUN rm -rf /usr/bin/apt* /usr/bin/dpkg* || true
@@ -108,6 +117,10 @@ ENV GODOT_PATH=/opt/godot/godot
 # Switch to non-root user
 USER claude
 WORKDIR /project
+
+# Entrypoint sets up Claude config on each container start
+# (required because /home/claude is a tmpfs mount)
+ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
 
 # Default command - can be overridden
 CMD ["bash"]

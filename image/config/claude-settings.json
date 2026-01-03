@@ -1,0 +1,23 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(*)",
+      "Read(*)",
+      "Write(*)",
+      "Edit(*)",
+      "MultiEdit(*)",
+      "Glob(*)",
+      "Grep(*)",
+      "LS(*)",
+      "NotebookRead(*)",
+      "NotebookEdit(*)",
+      "WebFetch(*)",
+      "TodoRead(*)",
+      "TodoWrite(*)",
+      "mcp__*"
+    ],
+    "deny": []
+  },
+  "autoUpdaterStatus": "disabled"
+}
+
