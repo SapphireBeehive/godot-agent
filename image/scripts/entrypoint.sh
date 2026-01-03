@@ -3,8 +3,10 @@
 #
 # This script runs on every container start to:
 # 1. Set up Claude Code settings (permissions, etc.)
-# 2. Verify settings are correctly installed
-# 3. Execute the provided command or default to bash
+# 2. Configure GitHub authentication (App or PAT)
+# 3. Clone repository if GITHUB_REPO is set (isolated mode)
+# 4. Verify MCP configuration
+# 5. Execute the provided command or default to bash
 #
 # The home directory is a tmpfs mount, so configuration must be
 # recreated on each container start.
@@ -112,6 +114,70 @@ if [[ -n "${GITHUB_TOKEN:-}" ]] || [[ -n "${GH_TOKEN:-}" ]]; then
             }
         fi
         echo "" >&2
+    fi
+fi
+
+# ============================================
+# Isolated Mode: Auto-clone repository
+# ============================================
+# If GITHUB_REPO is set and /project is empty, clone the repository
+if [[ -n "${GITHUB_REPO:-}" ]]; then
+    # Check if /project is empty (or only has lost+found from ext4 volume)
+    # Count files in /project excluding lost+found
+    file_count=0
+    for f in /project/*; do
+        [[ -e "$f" ]] || continue  # handle empty glob
+        [[ "$(basename "$f")" == "lost+found" ]] && continue
+        file_count=$((file_count + 1))
+    done
+    for f in /project/.*; do
+        [[ -e "$f" ]] || continue
+        [[ "$(basename "$f")" == "." || "$(basename "$f")" == ".." ]] && continue
+        file_count=$((file_count + 1))
+    done
+    
+    if [[ $file_count -eq 0 ]]; then
+        echo "🔄 Isolated mode: Cloning repository ${GITHUB_REPO}..." >&2
+        
+        BRANCH="${GITHUB_BRANCH:-main}"
+        REPO_URL="https://github.com/${GITHUB_REPO}.git"
+        
+        # Clone the repository
+        if git clone --branch "${BRANCH}" "${REPO_URL}" /project 2>&1; then
+            echo "✅ Repository cloned successfully" >&2
+            echo "   📁 Location: /project" >&2
+            echo "   🌿 Branch: ${BRANCH}" >&2
+            
+            # Create a working branch for the agent
+            cd /project
+            WORK_BRANCH="claude/work-$(date +%Y%m%d-%H%M%S)"
+            git checkout -b "${WORK_BRANCH}"
+            echo "   🔀 Working branch: ${WORK_BRANCH}" >&2
+            
+            # Install pre-push hook to protect main/master
+            mkdir -p /project/.git/hooks
+            cat > /project/.git/hooks/pre-push << 'HOOK'
+#!/bin/bash
+protected_branches=("main" "master")
+current_branch=$(git symbolic-ref HEAD 2>/dev/null | sed 's|refs/heads/||')
+for branch in "${protected_branches[@]}"; do
+    if [[ "$current_branch" == "$branch" ]]; then
+        echo "🛑 ERROR: Direct push to '$branch' is blocked!"
+        echo "   Use MCP create_pull_request tool instead."
+        exit 1
+    fi
+done
+exit 0
+HOOK
+            chmod +x /project/.git/hooks/pre-push
+            echo "" >&2
+        else
+            echo "❌ Failed to clone repository: ${GITHUB_REPO}" >&2
+            echo "   Check GITHUB_REPO format (owner/repo) and authentication" >&2
+        fi
+    else
+        echo "📂 /project is not empty, skipping clone" >&2
+        echo "   (Set to existing repo or use fresh volume for auto-clone)" >&2
     fi
 fi
 

@@ -73,7 +73,9 @@ You are running inside a **sandboxed Docker container** with restricted network 
 ┌─────────────────────────────────────────────────────────────┐
 │  SANDBOXED CONTAINER                                        │
 │                                                             │
-│  You are here: /project (mounted from host)                 │
+│  You are here: /project                                     │
+│    - Isolated Mode: You cloned this repo yourself           │
+│    - Mounted Mode: Mounted from host filesystem             │
 │                                                             │
 │  ✅ Available:                                              │
 │    - GitHub MCP tools (for API: issues, PRs, remote files)  │
@@ -88,6 +90,26 @@ You are running inside a **sandboxed Docker container** with restricted network 
 │    - Read-only root filesystem                              │
 └─────────────────────────────────────────────────────────────┘
 ```
+
+### Isolated Mode vs Mounted Mode
+
+You may be running in one of two deployment modes:
+
+| Mode | How /project Works | Typical Use Case |
+|------|-------------------|------------------|
+| **Isolated** | You cloned the repo on startup | Autonomous agent, multi-agent workflows |
+| **Mounted** | Host directory mounted in | Interactive development, quick iterations |
+
+**How to tell which mode you're in:**
+- Check if `/project/.git/config` remote matches `GITHUB_REPO` env var → Isolated
+- Check if there's a `claude/work-*` branch already checked out → Isolated (auto-created)
+- If unsure, check: `git remote -v`
+
+**In Isolated Mode:**
+- You already have a working branch (`claude/work-YYYYMMDD-HHMMSS`)
+- The repo was cloned fresh at container startup
+- Your workspace is destroyed when the container stops
+- Push your work via MCP before the container stops!
 
 ## Your Mission: Autonomous Development
 

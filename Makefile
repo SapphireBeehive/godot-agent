@@ -9,7 +9,8 @@
         auth auth-status auth-setup-token install-hooks install-tests \
         test-security test-dns test-network test-hardening test-filesystem test-offline \
         test-github-app-module test-github-app-integration \
-        up-agent down-agent claude claude-print claude-shell agent-status verify-permissions \
+        up-agent down-agent up-isolated down-isolated \
+        claude claude-print claude-shell agent-status verify-permissions \
         queue-start queue-stop queue-status queue-logs queue-add queue-init queue-results \
         github-app-test github-app-validate
 
@@ -47,11 +48,17 @@ help: ## Show this help message
 	@echo "$(GREEN)Quick Start (Persistent Mode - Recommended):$(RESET)"
 	@echo "  make doctor                    # Check your environment"
 	@echo "  make build                     # Build the agent image"
-	@echo "  make up-agent PROJECT=~/game   # Start persistent agent"
+	@echo ""
+	@echo "$(CYAN)Persistent Mode (mount local project):$(RESET)"
+	@echo "  make up-agent PROJECT=~/game   # Start agent with local project"
 	@echo "  make claude                    # Interactive Claude session"
 	@echo "  make claude P=\"your prompt\"    # Single prompt"
-	@echo "  make claude-print P=\"prompt\"   # Non-interactive batch mode"
 	@echo "  make down-agent                # Stop when done"
+	@echo ""
+	@echo "$(CYAN)Isolated Mode (agent clones its own repo):$(RESET)"
+	@echo "  make up-isolated REPO=org/repo # Start agent (clones repo)"
+	@echo "  make claude P=\"fix issue #1\"   # Agent works in isolation"
+	@echo "  make down-isolated             # Stop (destroys workspace)"
 	@echo ""
 	@echo "$(GREEN)Quick Start (One-shot Mode):$(RESET)"
 	@echo "  make run-direct PROJECT=/path/to/project"
@@ -145,6 +152,8 @@ validate: ## Validate compose configuration
 		echo "✓ compose.staging.yml is valid"
 	@cd $(COMPOSE_DIR) && docker compose -f compose.base.yml -f compose.persistent.yml config --quiet && \
 		echo "✓ compose.persistent.yml is valid"
+	@cd $(COMPOSE_DIR) && docker compose -f compose.base.yml -f compose.isolated.yml config --quiet && \
+		echo "✓ compose.isolated.yml is valid"
 	@cd $(COMPOSE_DIR) && docker compose -f compose.base.yml -f compose.queue.yml config --quiet && \
 		echo "✓ compose.queue.yml is valid"
 	@cd $(COMPOSE_DIR) && docker compose -f compose.offline.yml config --quiet && \
@@ -222,7 +231,45 @@ agent-status: ## Show persistent agent status
 	else \
 		echo "Agent container: NOT RUNNING"; \
 		echo "  Start with: make up-agent PROJECT=/path/to/project"; \
+		echo "  Or isolated: make up-isolated REPO=owner/repo"; \
 	fi
+
+#==============================================================================
+# ISOLATED MODE (agent clones repo into its own workspace)
+#==============================================================================
+
+_check-repo:
+ifndef REPO
+	@echo "Error: REPO is required for isolated mode"
+	@echo "Usage: make up-isolated REPO=owner/repo"
+	@echo "   or: make up-isolated REPO=owner/repo BRANCH=feature-branch"
+	@exit 1
+endif
+
+up-isolated: _check-repo _check-auth ## Start isolated agent (REPO=owner/repo, BRANCH=main)
+	@echo "Starting infrastructure services..."
+	@./$(SCRIPT_DIR)/up.sh
+	@echo ""
+	@echo "Starting isolated agent container..."
+	@echo "  Repository: $(REPO)"
+	@echo "  Branch: $(or $(BRANCH),main)"
+	@cd $(COMPOSE_DIR) && GITHUB_REPO=$(REPO) GITHUB_BRANCH=$(or $(BRANCH),main) \
+		docker compose --env-file ../.env -f compose.base.yml -f compose.isolated.yml up -d agent
+	@echo ""
+	@sleep 2  # Give time for clone to complete
+	@echo "Agent is running in isolated mode!"
+	@echo "  The agent will clone $(REPO) into its own workspace."
+	@echo ""
+	@echo "Commands:"
+	@echo "  make claude              - Start interactive Claude session"
+	@echo "  make claude P=\"prompt\"   - Run single prompt"
+	@echo "  make agent-status        - Check agent status"
+	@echo "  make down-isolated       - Stop agent (workspace destroyed)"
+
+down-isolated: ## Stop isolated agent (destroys workspace)
+	@echo "Stopping isolated agent container..."
+	@cd $(COMPOSE_DIR) && docker compose --env-file ../.env -f compose.base.yml -f compose.isolated.yml down -v
+	@echo "Agent stopped and workspace destroyed."
 
 claude: ## Run Claude in agent (interactive or P="prompt")
 ifdef P

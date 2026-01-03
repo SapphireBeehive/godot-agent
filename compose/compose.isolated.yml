@@ -1,0 +1,112 @@
+# compose.isolated.yml - Agent with isolated workspace (no host mount)
+# Use with: docker compose -f compose.base.yml -f compose.isolated.yml up -d
+#
+# In this mode, the agent:
+# 1. Has its own isolated /project directory (Docker volume)
+# 2. Clones the repository itself on startup (via GITHUB_REPO env var)
+# 3. Works in complete isolation from the host filesystem
+# 4. Pushes changes back via MCP tools
+#
+# Benefits:
+# - No risk of corrupting host files
+# - Multiple agents can work on different branches simultaneously
+# - Clean, reproducible environment each time
+# - Agent is fully autonomous
+#
+# Required environment variables:
+#   GITHUB_REPO         - Repository to clone (e.g., "owner/repo")
+#   GITHUB_APP_ID       - GitHub App ID for authentication
+#   GITHUB_APP_INSTALLATION_ID - GitHub App installation ID
+#
+# Optional:
+#   GITHUB_BRANCH       - Branch to checkout after cloning (default: main)
+#   AGENT_WORKSPACE     - Named volume for persistence (default: anonymous)
+
+services:
+  agent:
+    build:
+      context: ../image
+      dockerfile: Dockerfile
+      args:
+        - GODOT_VERSION=${GODOT_VERSION:-4.6}
+        - GODOT_RELEASE_TYPE=${GODOT_RELEASE_TYPE:-beta2}
+    image: claude-godot-agent:latest
+    container_name: agent
+    stdin_open: true
+    tty: true
+    
+    # Keep container running - attach with docker exec
+    command: ["tail", "-f", "/dev/null"]
+    restart: unless-stopped
+    
+    # Environment - authentication + repo configuration
+    environment:
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+      - CLAUDE_CODE_OAUTH_TOKEN=${CLAUDE_CODE_OAUTH_TOKEN:-}
+      # Repository to clone on startup
+      - GITHUB_REPO=${GITHUB_REPO:-}
+      - GITHUB_BRANCH=${GITHUB_BRANCH:-main}
+      # GitHub App authentication (required for isolated mode)
+      - GITHUB_APP_ID=${GITHUB_APP_ID:-}
+      - GITHUB_APP_INSTALLATION_ID=${GITHUB_APP_INSTALLATION_ID:-}
+      - GITHUB_APP_PRIVATE_KEY=${GITHUB_APP_PRIVATE_KEY:-}
+      - GITHUB_APP_PRIVATE_KEY_PATH=${GITHUB_APP_PRIVATE_KEY_PATH:-}
+      - GITHUB_APP_REPOSITORIES=${GITHUB_APP_REPOSITORIES:-}
+      - HOME=/home/claude
+      - USER=claude
+    
+    # Network: sandbox only, use dnsfilter for DNS
+    networks:
+      sandbox_net:
+        ipv4_address: 10.100.1.100
+    dns:
+      - 10.100.1.2  # dnsfilter
+    
+    # Isolated workspace - no host mounts!
+    # /project is an anonymous volume (or named if AGENT_WORKSPACE is set)
+    volumes:
+      - ${AGENT_WORKSPACE:-agent_workspace}:/project:rw
+      - ../secrets:/secrets:ro
+    
+    # Security hardening
+    read_only: true
+    tmpfs:
+      - /tmp:size=100M,mode=1777
+      - /home/claude:size=50M,mode=0755,uid=1000,gid=1000
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    
+    # Resource limits
+    deploy:
+      resources:
+        limits:
+          memory: ${AGENT_MEMORY_LIMIT:-2G}
+          cpus: "${AGENT_CPU_LIMIT:-2.0}"
+          pids: 256
+        reservations:
+          memory: 256M
+    
+    # Depends on infrastructure services
+    depends_on:
+      dnsfilter:
+        condition: service_started
+      proxy_github:
+        condition: service_started
+      proxy_anthropic_api:
+        condition: service_started
+    
+    # Working directory
+    working_dir: /project
+
+# Default volume (can be overridden with AGENT_WORKSPACE env var)
+volumes:
+  agent_workspace:
+    driver: local
+
+networks:
+  sandbox_net:
+    external: true
+    name: claude-godot-sandbox_sandbox_net
+
