@@ -1039,8 +1039,8 @@ Always comment on an issue before starting work:
 Always work on a branch, never directly on main:
 
 ```bash
-# Naming: godot-agent/issue-N-description
-git checkout -b godot-agent/issue-15-fix-player-jump
+# Naming: claude/issue-N-description
+git checkout -b claude/issue-15-fix-player-jump
 ```
 
 ### 4. Commit Often
