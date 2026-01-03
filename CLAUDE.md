@@ -11,26 +11,6 @@ The sandbox isolates Claude Code in a container with:
 
 This protects against Claude accidentally (or maliciously) accessing sensitive data or making unwanted network connections.
 
-## Repository Structure
-
-```
-godot-agent/
-├── compose/                 # Docker Compose configurations
-│   ├── compose.base.yml     # Infrastructure: DNS filter + proxy services
-│   ├── compose.direct.yml   # Agent with direct project mount
-│   ├── compose.staging.yml  # Agent with staging directory mount
-│   └── compose.offline.yml  # Agent with no network access
-├── configs/
-│   ├── coredns/             # DNS allowlist configuration
-│   └── nginx/               # TCP proxy configurations
-├── image/
-│   ├── Dockerfile           # Agent container image
-│   └── install/             # Installation scripts for Godot and Claude Code
-├── scripts/                 # Operational scripts (run from host)
-├── .github/workflows/       # CI/CD pipelines
-└── logs/                    # Session logs (gitignored)
-```
-
 ## Pre-built Image
 
 The agent image is automatically built and pushed to GitHub Container Registry:
@@ -55,24 +35,273 @@ Multi-arch manifest with both platforms (pulls correct one automatically):
 
 Build workflow: `.github/workflows/build-and-push.yml`
 
-## Key Commands
+---
 
-All commands are run on the **host machine**, not inside containers:
+## Skills
+
+### Skill: First-Time Setup
+
+When setting up this project for the first time:
 
 ```bash
-# Setup and health check
-make doctor                  # Verify environment is configured
-make auth                    # Check authentication status
-make build                   # Build the agent container image
+# 1. Check environment prerequisites
+make doctor
 
-# Running the sandbox
-make up                      # Start infrastructure (DNS + proxies)
-make run-direct PROJECT=/path/to/godot/project
-make down                    # Stop all services
+# 2. Set up authentication (Claude Max recommended)
+claude setup-token
+# Copy the token, then:
+echo 'CLAUDE_CODE_OAUTH_TOKEN=sk-ant-...' >> .env
 
-# Security
-make scan PROJECT=/path      # Scan for dangerous patterns in GDScript
+# 3. Verify auth is configured
+make auth
+
+# 4. Install git hooks for secret scanning
+make install-hooks
+
+# 5. Build the agent image
+make build
+
+# 6. Start infrastructure services
+make up
 ```
+
+### Skill: Running Claude in the Sandbox
+
+To run Claude Code inside the sandbox with a Godot project:
+
+```bash
+# Direct mode - Claude can modify files immediately
+make run-direct PROJECT=/path/to/godot/project
+
+# Staging mode - Safer, changes go to staging directory first
+make run-staging STAGING=/path/to/staging
+
+# Offline mode - No network access at all
+make run-offline PROJECT=/path/to/godot/project
+```
+
+### Skill: Daily Workflow
+
+Typical daily operations:
+
+```bash
+# Start your day - bring up services
+make up
+
+# Check everything is healthy
+make status
+
+# Run Claude with your project
+make run-direct PROJECT=~/my-game
+
+# When done - shut down services
+make down
+```
+
+### Skill: Debugging Infrastructure Issues
+
+When things aren't working:
+
+```bash
+# Check service health
+make status
+
+# View live logs from all services
+make logs
+
+# View only DNS filter logs (see what's being blocked)
+make logs-dns
+
+# View only proxy logs
+make logs-proxy
+
+# Full restart
+make restart
+
+# Nuclear option - stop everything and clean up
+make clean-all
+```
+
+### Skill: Before Committing Changes
+
+Always run these before committing:
+
+```bash
+# Validate all compose files parse correctly
+make validate
+
+# Lint shell scripts
+make lint-scripts
+
+# Run the full test suite
+make test
+
+# If you have `act` installed, run CI locally
+make ci
+```
+
+### Skill: Scanning for Security Issues
+
+After Claude modifies a project, scan for dangerous patterns:
+
+```bash
+# Scan a project directory
+make scan PROJECT=/path/to/godot/project
+
+# Or use the script directly for more options
+./scripts/scan-dangerous.sh /path/to/project
+```
+
+### Skill: Working with Staging Mode
+
+Safer workflow using staging:
+
+```bash
+# 1. Create staging directory
+mkdir -p ~/godot-staging
+
+# 2. Run Claude in staging mode
+make run-staging STAGING=~/godot-staging
+
+# 3. Review what changed
+make diff-review STAGING=~/godot-staging LIVE=~/my-game
+
+# 4. If satisfied, promote changes
+make promote STAGING=~/godot-staging LIVE=~/my-game
+
+# 4a. Or do a dry-run first
+make promote-dry-run STAGING=~/godot-staging LIVE=~/my-game
+```
+
+### Skill: Running Godot Commands
+
+Run Godot headless inside the sandbox:
+
+```bash
+# Check Godot version
+make godot-version PROJECT=~/my-game
+
+# Validate project structure
+make godot-validate PROJECT=~/my-game
+
+# Run project doctor
+make godot-doctor PROJECT=~/my-game
+
+# Run arbitrary Godot commands
+make run-godot PROJECT=~/my-game ARGS="--export-release Linux build/game"
+```
+
+### Skill: Testing CI Locally
+
+Test GitHub Actions workflows without pushing:
+
+```bash
+# Install act (first time only)
+brew install act
+
+# List available jobs
+make ci-list
+
+# Dry run - see what would happen
+make ci-dry-run
+
+# Run the full CI workflow
+make ci
+
+# Run specific jobs
+make ci-validate    # Linting and validation only
+make ci-build       # Build test only
+```
+
+### Skill: Building with Different Godot Versions
+
+Override the default Godot version:
+
+```bash
+# Build with Godot 4.4
+make build GODOT_VERSION=4.4
+
+# Build with a release candidate
+make build GODOT_VERSION=4.4 GODOT_RELEASE_TYPE=rc1
+
+# Force rebuild without cache
+make build-no-cache GODOT_VERSION=4.3
+```
+
+### Skill: Adding a New Allowed Domain
+
+To allow the sandbox to access a new domain:
+
+1. **Add DNS entry** in `configs/coredns/hosts.allowlist`:
+   ```
+   10.100.1.XX newdomain.com
+   ```
+
+2. **Create proxy service** in `compose/compose.base.yml`:
+   ```yaml
+   proxy_newdomain:
+     image: nginx:alpine
+     # ... (copy pattern from existing proxies)
+   ```
+
+3. **Create nginx config** in `configs/nginx/proxy_newdomain.conf`
+
+4. **Restart services**:
+   ```bash
+   make restart
+   ```
+
+---
+
+## Repository Structure
+
+```
+godot-agent/
+├── compose/                 # Docker Compose configurations
+│   ├── compose.base.yml     # Infrastructure: DNS filter + proxy services
+│   ├── compose.direct.yml   # Agent with direct project mount
+│   ├── compose.staging.yml  # Agent with staging directory mount
+│   └── compose.offline.yml  # Agent with no network access
+├── configs/
+│   ├── coredns/             # DNS allowlist configuration
+│   └── nginx/               # TCP proxy configurations
+├── image/
+│   ├── Dockerfile           # Agent container image
+│   └── install/             # Installation scripts for Godot and Claude Code
+├── scripts/                 # Operational scripts (run from host)
+├── .github/workflows/       # CI/CD pipelines
+├── .githooks/               # Git hooks for secret scanning
+└── logs/                    # Session logs (gitignored)
+```
+
+## Makefile Quick Reference
+
+| Target | Description |
+|--------|-------------|
+| `make help` | Show all available targets |
+| `make doctor` | Check environment health |
+| `make auth` | Check authentication status |
+| `make build` | Build the agent container image |
+| `make up` | Start infrastructure (DNS + proxies) |
+| `make down` | Stop all services |
+| `make status` | Show service status |
+| `make run-direct PROJECT=...` | Run Claude in direct mode |
+| `make run-staging STAGING=...` | Run Claude in staging mode |
+| `make scan PROJECT=...` | Scan for dangerous patterns |
+| `make validate` | Validate compose files |
+| `make test` | Run all checks |
+| `make ci` | Run CI workflow locally |
+| `make install-hooks` | Install pre-commit hooks |
+
+### Shortcuts
+
+| Short | Full Target |
+|-------|-------------|
+| `make d` | `make doctor` |
+| `make b` | `make build` |
+| `make u` | `make up` |
+| `make s` | `make status` |
+| `make l` | `make logs` |
 
 ## Authentication
 
@@ -88,41 +317,6 @@ Two methods are supported (set in `.env` file):
    ```bash
    # Add to .env: ANTHROPIC_API_KEY=sk-ant-...
    ```
-
-## Architecture
-
-```
-Host Machine
-├── Godot Editor (runs natively)
-├── Docker Desktop
-│   └── Containers
-│       ├── dnsfilter (CoreDNS) - Allowlists specific domains
-│       ├── proxy_github       - Forwards to github.com
-│       ├── proxy_anthropic    - Forwards to api.anthropic.com
-│       └── agent              - Claude Code + Godot headless
-│           └── /project       - Mounted from host (RW)
-```
-
-The agent container can ONLY reach the internet through the proxy containers, which only connect to specific upstream hosts.
-
-## Security Model
-
-### What's Protected
-- Agent cannot access arbitrary network destinations
-- Agent cannot read host filesystem outside /project
-- Agent runs as non-root with minimal capabilities
-- Container is read-only with limited tmpfs for scratch space
-
-### What's NOT Protected
-- If Claude writes malicious GDScript, it could run when you open Godot Editor on host
-- Container/VM escape exploits (theoretical)
-- Prompt injection from malicious project files
-
-### Important: Always Review Changes
-```bash
-git diff                     # Review Claude's changes before committing
-./scripts/scan-dangerous.sh /path/to/project  # Check for dangerous patterns
-```
 
 ## Conventions
 
@@ -145,27 +339,8 @@ Types: `fix`, `feat`, `docs`, `ci`, `build`, `chore`, `refactor`
 - Use `shellcheck` for linting
 - Add `# shellcheck disable=SCXXXX` comments with explanation when needed
 
-## Development Workflows
-
-### Testing CI Locally
-```bash
-make ci                      # Run full CI workflow with `act`
-make ci-validate             # Run just the validation job
-```
-
-### Adding a New Allowed Domain
-1. Add entry to `configs/coredns/hosts.allowlist`
-2. Create new proxy service in `compose/compose.base.yml`
-3. Create nginx config in `configs/nginx/proxy_newdomain.conf`
-4. Update documentation
-
-### Building for Multiple Architectures
-The GitHub Actions workflow builds for both `linux/amd64` and `linux/arm64`. For local multi-arch builds:
-```bash
-docker buildx build --platform linux/amd64,linux/arm64 -t image:tag ./image
-```
-
 ## Files to Never Commit
+
 - `.env` (contains secrets)
 - `logs/` directory
 - Any API keys or tokens
@@ -185,8 +360,11 @@ This configures git to use `.githooks/pre-commit` which blocks commits containin
 
 ## Common Issues
 
-1. **DNS not working**: Restart with `make down && make up`
-2. **Permission denied on scripts**: Run `chmod +x scripts/*.sh`
-3. **Docker not running**: Start Docker Desktop first
-4. **Auth errors**: Run `make auth` to diagnose
-
+| Issue | Solution |
+|-------|----------|
+| DNS not working | `make restart` |
+| Permission denied on scripts | `chmod +x scripts/*.sh` |
+| Docker not running | Start Docker Desktop first |
+| Auth errors | `make auth` to diagnose |
+| CI failing locally | `make ci-dry-run` to debug |
+| Compose validation errors | `make validate` to see details |
