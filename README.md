@@ -448,7 +448,7 @@ The repository includes two workflows:
 
 | Workflow | Trigger | Purpose |
 |----------|---------|---------|
-| `ci.yml` | PRs, pushes | Validates compose, lints scripts, test builds, security tests |
+| `ci.yml` | PRs, pushes | Validates compose, lints scripts, test builds, 95 security tests |
 | `build-and-push.yml` | Merge to main | Builds multi-arch image, pushes to GHCR |
 
 #### Required Setup
