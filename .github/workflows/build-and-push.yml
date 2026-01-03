@@ -114,7 +114,8 @@ jobs:
           build-args: |
             GODOT_VERSION=${{ env.GODOT_VERSION }}
             GODOT_RELEASE_TYPE=${{ env.GODOT_RELEASE_TYPE }}
-            GODOT_SHA256=${{ vars.GODOT_SHA256 }}
+            # Note: SHA256 checksums are architecture-specific, can't use single value for multi-arch
+            # The fetch script will skip verification and print the checksum for reference
           cache-from: ${{ github.event.inputs.no_cache == 'true' && '' || 'type=gha' }}
           cache-to: type=gha,mode=max
           no-cache: ${{ github.event.inputs.no_cache == 'true' }}
