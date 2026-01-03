@@ -483,40 +483,81 @@ echo '# Empty file to prevent default nginx HTTP config' > configs/nginx/empty.c
 
 **Apply to all 5 proxy services**: `proxy_github`, `proxy_raw_githubusercontent`, `proxy_codeload_github`, `proxy_godot_docs`, `proxy_anthropic_api`
 
-### Critical Issue #2: CoreDNS Healthcheck Failures
+### Critical Issue #2: CoreDNS Configuration
 
-**Problem**: DNS filter shows as `(unhealthy)` in `docker ps`
+**Problem 1**: DNS filter shows as `(unhealthy)` in `docker ps`
 
-**Root Cause**: The CoreDNS image (`coredns/coredns:1.11.1`) is minimal/distroless and lacks common utilities:
-- No `wget` (original healthcheck tried to use this)
-- No `curl`
-- No `ps`
-- No `ls`
-- Not even basic shell utilities
+**Root Cause**: The CoreDNS image (`coredns/coredns:1.11.1`) is minimal/distroless and lacks common utilities (no wget, curl, ps, etc.).
 
-**Attempted Solutions That Failed**:
-1. ✗ `wget -q -O - http://localhost:8080/health` - wget not found
-2. ✗ `/dev/tcp/localhost/8080` - requires bash, not available in sh
-3. ✗ `ps aux | grep coredns` - ps not found
+**Solution**: Disable healthcheck. CoreDNS is simple enough that if the container is running, it's working. Also use `depends_on: condition: service_started` instead of `service_healthy` in compose files.
 
-**Working Solution**: Disable healthcheck entirely
+**Problem 2**: The `hosts` plugin with `fallthrough` didn't work correctly - all domains got NXDOMAIN.
 
-The CoreDNS image is so minimal that healthchecks are impractical. CoreDNS is simple enough that if the container is running, it's working:
+**Root Cause**: When using `fallthrough` with the `template` plugin, the template was catching everything before hosts could match.
 
-```yaml
-# In compose/compose.base.yml
-dnsfilter:
-  # ... other config ...
-  # Note: CoreDNS image is minimal (distroless), healthcheck disabled
+**Working Solution**: Use explicit domain zones in Corefile:
+
+```
+# Allowed domains - return proxy IPs
+github.com. www.github.com. raw.githubusercontent.com. ... {
+    hosts /etc/coredns/hosts.allowlist
+}
+
+# Everything else - return NXDOMAIN
+. {
+    template IN A { rcode NXDOMAIN }
+    template IN AAAA { rcode NXDOMAIN }
+}
 ```
 
-**Verification**: Check logs show CoreDNS started:
+**Verification**:
 ```bash
 docker compose -f compose/compose.base.yml logs dnsfilter
-# Should show: "CoreDNS-1.11.1" and "linux/arm64, go1.20.7"
+# Should show: "CoreDNS-1.11.1" and queries being logged
 ```
 
-### Critical Issue #3: Prefer Pre-built Image Over Local Builds
+### Critical Issue #3: Agent Container is Minimal
+
+**Problem**: Tests using `nslookup`, `wget`, `curl`, `ping`, or `ip` fail with "command not found"
+
+**Root Cause**: The agent container only has essential tools: bash, git, nodejs, npm, and Godot. No network diagnostic utilities.
+
+**Solution**: Use Node.js for network tests:
+
+```javascript
+// DNS lookup
+const dns = require('dns');
+const r = new dns.Resolver();
+r.setServers(['10.100.1.2']);
+r.resolve4('github.com', (err, addr) => console.log(err ? 'BLOCKED' : addr));
+
+// HTTP request
+const https = require('https');
+https.get('https://github.com', (res) => console.log('STATUS:' + res.statusCode));
+
+// TCP connection test
+const net = require('net');
+const socket = new net.Socket();
+socket.connect(80, '8.8.8.8', () => console.log('CONNECTED'));
+```
+
+**Also**: Use `docker inspect` instead of `ip addr` for network configuration.
+
+### Critical Issue #4: CI Test Project Permissions
+
+**Problem**: Security tests fail in GitHub Actions with "Permission denied" on /project
+
+**Root Cause**: The test project directory is created by the GitHub runner (root), but the container runs as `claude` (UID 1000).
+
+**Solution**: Set ownership in CI workflow:
+```yaml
+- name: Create test project directory
+  run: |
+    mkdir -p tests/.test-project
+    sudo chown -R 1000:1000 tests/.test-project
+```
+
+### Critical Issue #5: Prefer Pre-built Image Over Local Builds
 
 **Recommendation**: Pull from GHCR instead of building locally
 
@@ -535,7 +576,7 @@ make build  # ← Only needed if modifying the Dockerfile
 
 The CI/CD pipeline builds multi-arch images (amd64 + arm64) automatically on push to main.
 
-### Critical Issue #4: Godot Download URLs
+### Critical Issue #6: Godot Download URLs
 
 **Problem**: Godot beta/rc/dev releases return 404 from `github.com/godotengine/godot`
 
