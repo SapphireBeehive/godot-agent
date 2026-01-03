@@ -42,6 +42,11 @@ LABEL org.opencontainers.image.source="https://github.com/your-org/claude-godot-
 # - git: for version control operations
 # - ca-certificates: for HTTPS
 # - nodejs + npm: required for Claude Code CLI (npm package)
+# - curl: for downloading assets/plugins
+# - jq: for parsing JSON configs
+# - zip/unzip: for export packages and asset packs
+# - file: for detecting file types
+# - make: for GDExtension builds
 # Note: Node.js is required because Claude Code is distributed as npm package
 # hadolint ignore=DL3008
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -50,6 +55,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates \
     nodejs \
     npm \
+    # Workflow tools
+    curl \
+    jq \
+    zip \
+    unzip \
+    file \
+    make \
     # Godot runtime dependencies
     libfontconfig1 \
     libgl1 \
