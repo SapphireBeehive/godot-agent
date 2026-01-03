@@ -51,11 +51,23 @@ You are running inside a **sandboxed Docker container** with restricted network 
 
 ### Workflow Cheat Sheet
 
-| Mode | First Step | Last Step |
-|------|-----------|-----------|
-| **Issue** | `list_issues` to find work | `create_pull_request` |
-| **Queue** | Read `/project/.queue` | `create_pull_request` |
-| **Prompt** | Understand request | Report summary |
+| Mode | First Step | After PR | Then... |
+|------|-----------|----------|---------|
+| **Issue** | `list_issues` to find work | Release issue (comment) | Check feedback → find new issue |
+| **Queue** | Read `/project/.queue` | Release issue (comment) | Check feedback → find new issue |
+| **Prompt** | Understand request | Report summary | Done (one-shot) |
+
+### Continuous Loop (Issue/Queue Modes)
+
+```
+┌─────────────────────────────────────────────────────────┐
+│  1. Check your open PRs for review feedback             │
+│     → If feedback exists: address it first              │
+│  2. Find unclaimed issue → claim → new branch from main │
+│  3. Implement + test + PR + release                     │
+│  4. Repeat from step 1                                  │
+└─────────────────────────────────────────────────────────┘
+```
 
 ### Branch Naming
 
@@ -399,9 +411,13 @@ If you're running in **Issue Mode**, you browse existing GitHub issues to find w
 │  4. CODE    → Implement the solution + write tests           │
 │  5. TEST    → Run all tests, validate the project            │
 │  6. PUSH    → Push your branch and create a PR               │
-│  7. WAIT    → Do NOT merge. A human will review and merge.   │
+│  7. RELEASE → Comment that you're done, ready for review     │
+│  8. LOOP    → Check for feedback, then find new work         │
+│  9. REVISE  → If feedback exists, address it first           │
 └──────────────────────────────────────────────────────────────┘
 ```
+
+**Continuous Operation:** After releasing an issue, you should immediately check for review feedback on your open PRs, then find new unclaimed issues to work on. This is an ongoing loop—don't wait idle!
 
 ### Step 1: Find an Unclaimed Issue
 
@@ -497,17 +513,144 @@ Use create_pull_request:
 
 **Include "Closes #N" in the PR body** to link it to the issue.
 
-### Step 7: Wait for Review
+### Step 7: Release the Issue
+
+After creating the PR, **comment on the issue to "release" it** (signal you're done with initial work):
+
+```
+Use create_issue_comment:
+  - owner: owner
+  - repo: repo
+  - issue_number: N
+  - body: |
+      🤖 I've completed my work on this issue and created PR #XX.
+      
+      Releasing this issue - ready for human review.
+      
+      PR: #XX
+```
 
 ⛔ **NEVER merge your own pull request.**
 ⛔ **NEVER close the issue yourself.**
 
-Your job is done when the PR is created. A human will:
+A human will:
 1. Review your code
-2. Request changes if needed
+2. Request changes if needed (see Step 8)
 3. Merge the PR (which auto-closes the issue)
 
-If changes are requested, address them and push to the same branch.
+### Step 8: Continuous Workflow Loop
+
+After releasing an issue, **immediately look for more work**:
+
+```
+┌──────────────────────────────────────────────────────────────┐
+│  CONTINUOUS WORKFLOW LOOP                                    │
+│                                                              │
+│  1. CHECK YOUR OPEN PRs                                      │
+│     → Do any of your PRs have review comments?              │
+│     → If yes: address feedback first (see Step 9)           │
+│                                                              │
+│  2. FIND NEW WORK                                           │
+│     → List open issues                                       │
+│     → Find unclaimed issues (no recent agent claims)         │
+│     → Claim and start working                                │
+│                                                              │
+│  3. FRESH START                                              │
+│     → Switch back to main: git checkout main && git pull     │
+│     → Create new branch for new issue                        │
+│     → Repeat from Step 1 of Issue Mode                       │
+└──────────────────────────────────────────────────────────────┘
+```
+
+**Important:** Always start new work from a fresh `main` branch:
+
+```bash
+# After releasing an issue, start fresh for the next one
+git checkout main
+git pull origin main
+git checkout -b claude/issue-NEW-description
+```
+
+### Step 9: Addressing Review Feedback
+
+If you encounter one of your PRs with unaddressed review comments:
+
+**Priority:** Review feedback takes precedence over new issues.
+
+```
+┌──────────────────────────────────────────────────────────────┐
+│  HANDLING REVIEW FEEDBACK                                    │
+│                                                              │
+│  1. CHECK who commented                                      │
+│     → Ignore comments from godot-agent (that's you!)        │
+│     → Focus on comments from humans/other reviewers          │
+│                                                              │
+│  2. UNDERSTAND the feedback                                  │
+│     → Read all review comments carefully                     │
+│     → Look for requested changes                             │
+│     → Note any questions asked                               │
+│                                                              │
+│  3. RESPOND to questions                                     │
+│     → Use create_issue_comment to answer questions           │
+│     → Explain your reasoning if challenged                   │
+│                                                              │
+│  4. IMPLEMENT changes                                        │
+│     → Checkout the PR branch                                 │
+│     → Make requested modifications                           │
+│     → Run tests again                                        │
+│     → Push to the same branch (updates the PR)               │
+│                                                              │
+│  5. NOTIFY when done                                         │
+│     → Comment that you've addressed the feedback             │
+└──────────────────────────────────────────────────────────────┘
+```
+
+**Example: Responding to review feedback:**
+
+```bash
+# Switch to the existing PR branch
+git checkout claude/issue-42-add-player-dash
+git pull origin claude/issue-42-add-player-dash
+
+# Make the requested changes
+# ... edit files ...
+
+# Test again
+godot --headless -s res://tests/test_runner.gd
+
+# Push updates (PR is automatically updated)
+git add -A
+git commit -m "fix: address review feedback - add null check"
+git push
+```
+
+Then comment on the PR:
+
+```
+Use create_issue_comment (on the PR, not the issue):
+  - body: |
+      🤖 I've addressed the review feedback:
+      
+      - Added null check as requested
+      - Updated tests to cover edge case
+      
+      Ready for another look!
+```
+
+### Identifying Your Open Work
+
+To check if you have pending review feedback:
+
+```
+Use list_issues with state: open
+Look for issues where:
+  - You previously commented "I'm claiming this issue"
+  - There are newer comments from users OTHER than godot-agent
+  - The linked PR is still open (not merged)
+```
+
+**If you find pending feedback → address it first.**
+**If all your PRs are clean → find new work.**
 
 ### Workflow Summary (All Modes)
 
@@ -525,6 +668,10 @@ If changes are requested, address them and push to the same branch.
 | Run tests | `godot --headless -s res://tests/test_runner.gd` | All modes |
 | Push changes | `push_files` or git push | All modes |
 | Create PR | `create_pull_request` | Issue, Queue (required) / Prompt (optional) |
+| **Release issue** | `create_issue_comment` | Issue, Queue |
+| **Check for feedback** | `list_issues`, review comments | Issue, Queue |
+| **Address feedback** | Edit code, push to same branch | Issue, Queue |
+| **Find new work** | `list_issues` → claim → new branch | Issue, Queue |
 | Report summary | — | Prompt |
 | ❌ Merge PR | NEVER | — |
 | ❌ Close issue | NEVER | — |
