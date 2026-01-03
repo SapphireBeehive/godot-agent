@@ -18,10 +18,11 @@ services:
     stdin_open: true
     tty: true
     
-    # Environment - authentication via API key OR Claude Max subscription
-    # If ANTHROPIC_API_KEY is set, it takes priority over subscription auth
+    # Environment - authentication via API key OR Claude Max OAuth token
+    # Priority: ANTHROPIC_API_KEY > CLAUDE_CODE_OAUTH_TOKEN
     environment:
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+      - CLAUDE_CODE_OAUTH_TOKEN=${CLAUDE_CODE_OAUTH_TOKEN:-}
       - HOME=/home/claude
       - USER=claude
       - STAGING_MODE=true
@@ -35,10 +36,8 @@ services:
     
     # Staging mount: host staging directory -> /project (RW)
     # Live project is NOT mounted, preventing direct modification
-    # Claude credentials mounted read-only for subscription auth
     volumes:
       - ${STAGING_PATH:-./../staging}:/project:rw
-      - ${CLAUDE_CONFIG_PATH:-~/.claude}:/home/claude/.claude:ro
       # Optionally mount live project as read-only reference
       # - ${LIVE_PROJECT_PATH:-./../project}:/project-live:ro
     

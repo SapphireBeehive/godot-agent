@@ -6,7 +6,7 @@
 .PHONY: help build up down doctor logs clean run-direct run-staging run-offline \
         run-godot promote diff-review scan logs-report shell test validate \
         build-no-cache restart status ci ci-validate ci-build ci-list ci-dry-run \
-        auth auth-login auth-logout auth-status
+        auth auth-status auth-setup-token
 
 # Default target
 .DEFAULT_GOAL := help
@@ -41,7 +41,7 @@ help: ## Show this help message
 	@echo "====================="
 	@echo ""
 	@echo "$(GREEN)Quick Start:$(RESET)"
-	@echo "  make auth-login    # Login with Claude Max subscription"
+	@echo "  make auth          # Check authentication status"
 	@echo "  make doctor        # Check your environment"
 	@echo "  make build         # Build the agent image"
 	@echo "  make up            # Start infrastructure services"
@@ -70,11 +70,8 @@ auth: auth-status ## Check Claude authentication status (alias)
 auth-status: ## Check Claude authentication status
 	@./$(SCRIPT_DIR)/setup-claude-auth.sh status
 
-auth-login: ## Login with Claude Max subscription
-	@./$(SCRIPT_DIR)/setup-claude-auth.sh login
-
-auth-logout: ## Logout from Claude
-	@./$(SCRIPT_DIR)/setup-claude-auth.sh logout
+auth-setup-token: ## Generate Claude Max OAuth token
+	@./$(SCRIPT_DIR)/setup-claude-auth.sh setup-token
 
 build: ## Build the agent container image
 	@GODOT_VERSION=$(GODOT_VERSION) \

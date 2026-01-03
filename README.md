@@ -109,7 +109,8 @@ cd godot-agent
 cp .env.example .env
 
 # Option A: Claude Max subscription (recommended - included with subscription)
-./scripts/setup-claude-auth.sh login
+claude setup-token
+# Then add token to .env: CLAUDE_CODE_OAUTH_TOKEN=sk-ant-...
 
 # Option B: API key (pay-per-use)
 # Edit .env and add your ANTHROPIC_API_KEY
@@ -133,24 +134,17 @@ Claude Code supports two authentication methods. Choose the one that works best 
 
 ### Option 1: Claude Max Subscription (Recommended)
 
-If you have a Claude Max subscription, you can use it instead of paying for API usage:
+If you have a Claude Max subscription, generate an OAuth token:
 
 ```bash
-# Install Claude CLI on your host (if not already installed)
-npm install -g @anthropic-ai/claude-code
+# Generate a long-lived OAuth token (valid for 1 year)
+claude setup-token
 
-# Login with your Claude account
-./scripts/setup-claude-auth.sh login
+# Add the token to your .env file
+echo 'CLAUDE_CODE_OAUTH_TOKEN=sk-ant-...' >> .env
 
-# Check status
+# Verify it's configured
 ./scripts/setup-claude-auth.sh status
-```
-
-This opens a browser for OAuth authentication. Your credentials are stored in `~/.claude/` and automatically mounted into containers.
-
-**Note**: If `ANTHROPIC_API_KEY` is set, it takes priority over subscription auth. Unset it to use your Max subscription:
-```bash
-unset ANTHROPIC_API_KEY
 ```
 
 ### Option 2: API Key (Pay-per-use)
@@ -158,8 +152,7 @@ unset ANTHROPIC_API_KEY
 Get an API key from [Anthropic Console](https://console.anthropic.com/) and add it to your `.env` file:
 
 ```bash
-# .env
-ANTHROPIC_API_KEY=sk-ant-api03-...
+echo 'ANTHROPIC_API_KEY=sk-ant-...' >> .env
 ```
 
 ### Checking Authentication Status
@@ -169,6 +162,8 @@ ANTHROPIC_API_KEY=sk-ant-api03-...
 ```
 
 This shows which authentication method is configured and ready to use.
+
+**Note**: If both are set, `ANTHROPIC_API_KEY` takes priority over `CLAUDE_CODE_OAUTH_TOKEN`.
 
 ### Using Make vs Scripts
 

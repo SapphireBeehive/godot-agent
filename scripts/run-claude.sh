@@ -9,8 +9,8 @@
 # Prerequisites:
 #   - Docker and docker compose installed
 #   - Authentication configured (see ./scripts/setup-claude-auth.sh)
-#     Option 1: ANTHROPIC_API_KEY in .env file (pay-per-use)
-#     Option 2: Claude Max subscription (run ./scripts/setup-claude-auth.sh login)
+#     Option 1: CLAUDE_CODE_OAUTH_TOKEN in .env (run: claude setup-token)
+#     Option 2: ANTHROPIC_API_KEY in .env file (pay-per-use)
 #   - Agent image built (run ./scripts/build.sh first)
 
 set -euo pipefail
@@ -53,14 +53,14 @@ Examples:
   $0 offline /path/to/project
 
 Environment variables:
-  ANTHROPIC_API_KEY    - API key for Claude (pay-per-use, optional)
-  CLAUDE_CONFIG_PATH   - Path to Claude config directory (default: ~/.claude)
-  AGENT_MEMORY_LIMIT   - Container memory limit (default: 2G)
-  AGENT_CPU_LIMIT      - Container CPU limit (default: 2.0)
+  ANTHROPIC_API_KEY       - API key for Claude (pay-per-use)
+  CLAUDE_CODE_OAUTH_TOKEN - OAuth token from Claude Max subscription
+  AGENT_MEMORY_LIMIT      - Container memory limit (default: 2G)
+  AGENT_CPU_LIMIT         - Container CPU limit (default: 2.0)
 
-Authentication:
-  Either ANTHROPIC_API_KEY or Claude Max subscription credentials are required.
-  Run ./scripts/setup-claude-auth.sh for setup help.
+Authentication (choose one):
+  - ANTHROPIC_API_KEY: API key from console.anthropic.com (pay-per-use)
+  - CLAUDE_CODE_OAUTH_TOKEN: Run 'claude setup-token' (included with Max subscription)
 EOF
     exit 1
 }
@@ -100,47 +100,27 @@ else
     log_warn ".env file not found."
 fi
 
-# Claude config location (for Max subscription auth)
-CLAUDE_CONFIG="${CLAUDE_CONFIG_PATH:-$HOME/.claude}"
-
 # Validate authentication for non-offline modes
 if [[ "$MODE" != "offline" ]]; then
-    HAS_API_KEY=false
-    HAS_SUBSCRIPTION=false
-    
-    # Check for API key
+    # Check for API key (takes priority)
     if [[ -n "${ANTHROPIC_API_KEY:-}" ]]; then
-        HAS_API_KEY=true
-    fi
-    
-    # Check for Claude Max subscription credentials
-    if [[ -d "$CLAUDE_CONFIG" ]]; then
-        # Look for credential files (common patterns)
-        if ls "$CLAUDE_CONFIG"/*.json &> /dev/null 2>&1 || \
-           ls "$CLAUDE_CONFIG"/credentials* &> /dev/null 2>&1 || \
-           ls "$CLAUDE_CONFIG"/auth* &> /dev/null 2>&1; then
-            HAS_SUBSCRIPTION=true
-        fi
-    fi
-    
-    # Require at least one auth method
-    if [[ "$HAS_API_KEY" == "false" && "$HAS_SUBSCRIPTION" == "false" ]]; then
+        log_info "Authentication: API key (ANTHROPIC_API_KEY)"
+    # Check for OAuth token (Claude Max subscription)
+    elif [[ -n "${CLAUDE_CODE_OAUTH_TOKEN:-}" ]]; then
+        log_info "Authentication: Claude Max (CLAUDE_CODE_OAUTH_TOKEN)"
+    else
         log_error "No Claude authentication found!"
         echo ""
-        echo "You need either:"
-        echo "  1. API Key: Add ANTHROPIC_API_KEY to .env file"
-        echo "  2. Claude Max: Run ./scripts/setup-claude-auth.sh login"
+        echo "You need one of these in your .env file:"
         echo ""
-        echo "Run ./scripts/setup-claude-auth.sh status for details."
+        echo "  Option 1 - Claude Max subscription (recommended):"
+        echo "    Run: claude setup-token"
+        echo "    Add: CLAUDE_CODE_OAUTH_TOKEN=sk-ant-..."
+        echo ""
+        echo "  Option 2 - API key (pay-per-use):"
+        echo "    Add: ANTHROPIC_API_KEY=sk-ant-..."
+        echo ""
         exit 1
-    fi
-    
-    # Log which auth method will be used
-    if [[ "$HAS_API_KEY" == "true" ]]; then
-        log_info "Authentication: API key (ANTHROPIC_API_KEY)"
-    else
-        log_info "Authentication: Claude Max subscription"
-        log_info "Credentials from: $CLAUDE_CONFIG"
     fi
 fi
 

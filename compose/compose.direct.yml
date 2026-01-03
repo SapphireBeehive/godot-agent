@@ -19,10 +19,11 @@ services:
     stdin_open: true
     tty: true
     
-    # Environment - authentication via API key OR Claude Max subscription
-    # If ANTHROPIC_API_KEY is set, it takes priority over subscription auth
+    # Environment - authentication via API key OR Claude Max OAuth token
+    # Priority: ANTHROPIC_API_KEY > CLAUDE_CODE_OAUTH_TOKEN
     environment:
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+      - CLAUDE_CODE_OAUTH_TOKEN=${CLAUDE_CODE_OAUTH_TOKEN:-}
       - HOME=/home/claude
       - USER=claude
     
@@ -34,10 +35,8 @@ services:
       - 10.100.1.2  # dnsfilter
     
     # Direct mount: host project directory -> /project (RW)
-    # Claude credentials mounted read-only for subscription auth
     volumes:
       - ${PROJECT_PATH:-./../project}:/project:rw
-      - ${CLAUDE_CONFIG_PATH:-~/.claude}:/home/claude/.claude:ro
     
     # Security hardening
     read_only: true

@@ -62,22 +62,23 @@ network_mode: host  # ❌ NEVER
 
 The sandbox supports two authentication methods. Choose the one appropriate for your use case.
 
-### Claude Max Subscription (Recommended)
+### Claude Max OAuth Token (Recommended)
 
-Using your Claude Max subscription credentials is recommended because:
-- No API key to accidentally expose
+Using a Claude Max OAuth token is recommended because:
 - Usage included with subscription (no surprise charges)
-- Credentials stored securely in `~/.claude/`
+- Token is long-lived (1 year) but can be revoked
+- Passed as environment variable (not stored in container)
 
 **Setup**:
 ```bash
-./scripts/setup-claude-auth.sh login
+claude setup-token
+# Add the token to .env: CLAUDE_CODE_OAUTH_TOKEN=sk-ant-...
 ```
 
-**Security notes**:
-- Credentials are mounted read-only into containers
-- Logout with `./scripts/setup-claude-auth.sh logout` if compromised
-- Don't share your `~/.claude/` directory
+**If your OAuth token is compromised**:
+1. Generate a new token with `claude setup-token`
+2. Update your `.env` file with the new token
+3. The old token should be automatically invalidated
 
 ### API Key Authentication
 
