@@ -13,10 +13,40 @@ This protects against Claude accidentally (or maliciously) accessing sensitive d
 
 **Permissions**: Claude Code runs with all permissions pre-granted (file edits, command execution, etc.) since security is enforced by the container sandbox, not by Claude's internal permission system. See `image/config/claude-settings.json` for the full list.
 
+## Contents
+
+- [Pre-built Image](#pre-built-image)
+- [Skills](#skills)
+  - [First-Time Setup](#skill-first-time-setup)
+  - [Using GitHub PAT](#skill-using-github-personal-access-token)
+  - [Persistent Mode (Recommended)](#skill-running-claude-in-the-sandbox-persistent-mode---recommended)
+  - [Non-Interactive / Automation](#skill-non-interactive--automation-mode)
+  - [One-shot Mode](#skill-running-claude-in-the-sandbox-one-shot-mode)
+  - [Daily Workflows](#skill-daily-workflow-persistent-mode)
+  - [Queue Mode](#skill-queue-mode-async-task-processing)
+  - [Debugging Infrastructure](#skill-debugging-infrastructure-issues)
+  - [Before Committing](#skill-before-committing-changes)
+  - [Security Scanning](#skill-scanning-for-security-issues)
+  - [Staging Mode](#skill-working-with-staging-mode)
+  - [Running Godot](#skill-running-godot-commands)
+  - [Security Tests](#skill-running-security-tests)
+  - [Testing CI Locally](#skill-testing-ci-locally)
+  - [Building with Different Godot Versions](#skill-building-with-different-godot-versions)
+  - [Adding a New Allowed Domain](#skill-adding-a-new-allowed-domain)
+- [Repository Structure](#repository-structure)
+- [Logging](#logging)
+- [Makefile Quick Reference](#makefile-quick-reference)
+- [Authentication](#authentication)
+- [Conventions](#conventions)
+- [Common Issues](#common-issues)
+- [Lessons Learned](#lessons-learned-for-future-claude-instances)
+
+---
+
 ## Pre-built Image
 
 The agent image is automatically built and pushed to GitHub Container Registry:
-```
+```text
 ghcr.io/sapphirebeehive/claude-godot-agent
 ```
 
@@ -47,6 +77,9 @@ Build workflow: `.github/workflows/build-and-push.yml`
 When setting up this project for the first time:
 
 ```bash
+# 0. Verify Docker is running
+docker ps || { echo "Error: Docker is not running. Start Docker Desktop first."; exit 1; }
+
 # 1. Check environment prerequisites
 make doctor
 
@@ -277,7 +310,7 @@ make queue-stop
 ```
 
 Queue directory structure:
-```
+```text
 /project/.claude/
 ├── queue/           # Drop task files here
 ├── processing/      # Currently being processed  
@@ -392,7 +425,21 @@ make test-security
 
 # Run tests in parallel (faster)
 make test-security-parallel
+```
 
+**Expected output (all tests passing):**
+```text
+==================== test session starts ====================
+collected 23 items
+tests/test_dns_filtering.py ......                      [ 26%]
+tests/test_network_restrictions.py ....                 [ 43%]
+tests/test_container_hardening.py ......                [ 69%]
+tests/test_filesystem_restrictions.py ....              [ 87%]
+tests/test_offline_mode.py ...                          [100%]
+==================== 23 passed in 45.32s ====================
+```
+
+```bash
 # Run specific test modules
 make test-dns          # DNS filtering tests
 make test-network      # Network isolation tests
@@ -499,7 +546,7 @@ To allow the sandbox to access a new domain:
 
 ## Repository Structure
 
-```
+```text
 godot-agent/
 ├── compose/                 # Docker Compose configurations
 │   ├── compose.base.yml     # Infrastructure: DNS filter + proxy services
@@ -661,7 +708,7 @@ Two methods are supported (set in `.env` file):
 
 ### Commit Messages
 Use conventional commits:
-```
+```text
 type(scope): short description
 
 Optional longer explanation.
@@ -712,6 +759,7 @@ This configures git to use `.githooks/pre-commit` which:
 | CI failing locally | `make ci-dry-run` to debug |
 | Compose validation errors | `make validate` to see details |
 | Proxy containers restarting | Check nginx configs, see Lessons Learned below |
+| Agent missing nslookup/curl | Use Node.js for network tests (see Lessons Learned #3) |
 
 ---
 
@@ -736,7 +784,7 @@ When initializing this repo from scratch, follow this exact sequence:
 ### Critical Issue #1: Nginx Stream Proxy Configuration
 
 **Problem**: Nginx proxy containers crash-loop on startup with error:
-```
+```text
 nginx: [emerg] "location" directive is not allowed here in /etc/nginx/conf.d/default.conf:8
 ```
 
@@ -774,7 +822,7 @@ echo '# Empty file to prevent default nginx HTTP config' > configs/nginx/empty.c
 
 **Working Solution**: Use explicit domain zones in Corefile:
 
-```
+```text
 # Allowed domains - return proxy IPs
 github.com. www.github.com. raw.githubusercontent.com. ... {
     hosts /etc/coredns/hosts.allowlist
@@ -931,7 +979,7 @@ docker compose -f compose/compose.base.yml logs dnsfilter
 
 ### Network Architecture Reminder
 
-```
+```text
 ┌─────────────────────────────────────────────────────────┐
 │  sandbox_net (10.100.1.0/24) - INTERNAL, NO INTERNET    │
 │                                                          │
