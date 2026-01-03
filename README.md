@@ -810,6 +810,7 @@ godot-agent/
 ## Documentation
 
 - **[Workflow Guide](docs/WORKFLOW_GUIDE.md)** - Detailed guide for Persistent and Queue modes
+- **[Logging Guide](docs/LOGS.md)** - Where logs are stored and how to access them
 - **[CLAUDE.md](CLAUDE.md)** - Context file for Claude instances
 - **[SECURITY.md](SECURITY.md)** - Threat model and security considerations
 - **[CONTRIBUTING.md](CONTRIBUTING.md)** - Contribution guidelines

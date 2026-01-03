@@ -441,6 +441,9 @@ godot-agent/
 ├── configs/
 │   ├── coredns/             # DNS allowlist configuration
 │   └── nginx/               # TCP proxy configurations
+├── docs/                    # Public documentation (user-facing guides)
+│   ├── WORKFLOW_GUIDE.md    # Detailed workflow documentation
+│   └── LOGS.md              # Logging guide
 ├── image/
 │   ├── Dockerfile           # Agent container image
 │   ├── config/
@@ -449,6 +452,11 @@ godot-agent/
 │   └── scripts/
 │       ├── entrypoint.sh    # Container entrypoint (sets up Claude config)
 │       └── queue-watcher.js # Async task queue processor
+├── notes/                    # Private notes (prompts, issues, personal notes from Claude)
+│   ├── OPEN_ISSUES.md       # Tracked issues and TODOs
+│   ├── issue.md              # Current issue being worked on
+│   ├── prompt.md             # Prompts for Claude
+│   └── *.md                  # Other personal notes
 ├── scripts/                 # Operational scripts (run from host)
 ├── tests/                   # Security test suite (pytest)
 │   ├── conftest.py          # Docker Compose fixtures
@@ -461,6 +469,55 @@ godot-agent/
 ├── .githooks/               # Git hooks for secret scanning
 └── logs/                    # Session logs (gitignored)
 ```
+
+### Documentation Organization
+
+**Public Documentation (`docs/`):**
+- User-facing guides and documentation
+- Examples: `WORKFLOW_GUIDE.md`, `LOGS.md`
+- These are intended for users/contributors and should be well-maintained
+
+**Private Notes (`notes/`):**
+- Prompts, issues, and personal notes from Claude
+- Examples: `OPEN_ISSUES.md`, `issue.md`, `prompt.md`
+- These are for internal use and may contain work-in-progress content
+
+## Logging
+
+The sandbox provides comprehensive logging for all operations. See [docs/LOGS.md](docs/LOGS.md) for complete details.
+
+### Quick Reference
+
+**Session Logs (File-based):**
+- **Location:** `./logs/` directory in project root
+- **One-shot mode** (`make run-direct`, etc.): `logs/claude_<mode>_<timestamp>.log`
+- **Persistent mode with prompts** (`make claude P="..."`): `logs/claude_prompt_<timestamp>.log`
+- **Persistent mode interactive** (`make claude`): `logs/claude_interactive_<timestamp>.log` (start/end times only)
+- **Queue mode**: `<project>/.claude/results/<task-name>.log`
+
+**Docker Container Logs:**
+```bash
+# View all agent logs
+docker logs agent
+
+# Follow in real-time
+docker logs -f agent
+
+# Last 100 lines
+docker logs --tail 100 agent
+```
+- Full output for interactive sessions
+- All stdout/stderr from the container
+
+**Infrastructure Logs:**
+```bash
+make logs          # All services
+make logs-dns      # DNS filter only
+make logs-proxy    # All proxies
+make logs-report   # Generate activity report
+```
+
+For detailed logging information, see [docs/LOGS.md](docs/LOGS.md).
 
 ## Makefile Quick Reference
 
