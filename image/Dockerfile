@@ -5,8 +5,6 @@
 # Build arguments for version pinning
 ARG GODOT_VERSION=4.6
 ARG GODOT_RELEASE_TYPE=beta2
-# GODOT_SHA256 is optional - version-specific, skipped if not set
-ARG GODOT_SHA256
 
 # NOTE: Native arm64 Godot builds may require building from source
 
@@ -15,7 +13,6 @@ FROM debian:bookworm-slim AS builder
 
 ARG GODOT_VERSION
 ARG GODOT_RELEASE_TYPE
-ARG GODOT_SHA256
 
 # Install build tools
 # hadolint ignore=DL3008
@@ -30,7 +27,6 @@ COPY install/fetch_godot.sh /tmp/fetch_godot.sh
 RUN chmod +x /tmp/fetch_godot.sh && \
     GODOT_VERSION=${GODOT_VERSION} \
     GODOT_RELEASE_TYPE=${GODOT_RELEASE_TYPE} \
-    GODOT_SHA256=${GODOT_SHA256} \
     /tmp/fetch_godot.sh
 
 # --- Stage 2: Runtime image ---

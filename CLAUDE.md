@@ -228,27 +228,11 @@ make build GODOT_VERSION=4.6 GODOT_RELEASE_TYPE=rc1
 make build-no-cache GODOT_VERSION=4.6 GODOT_RELEASE_TYPE=beta2
 ```
 
-**With SHA256 verification (recommended for production):**
-
-```bash
-# 1. Get the checksum for your specific version
-# For stable releases:
-VERSION="4.5.1-stable"
-curl -sL "https://github.com/godotengine/godot/releases/download/${VERSION}/Godot_v${VERSION}_linux.x86_64.zip" | sha256sum
-
-# For beta/rc/dev releases (use godot-builds repo):
-VERSION="4.6-beta2"
-curl -sL "https://github.com/godotengine/godot-builds/releases/download/${VERSION}/Godot_v${VERSION}_linux.x86_64.zip" | sha256sum
-
-# 2. Build with verification
-GODOT_SHA256=<hash> make build GODOT_VERSION=4.6 GODOT_RELEASE_TYPE=beta2
-```
+**Checksum verification is automatic** - the fetch script downloads Godot's official `SHA512-SUMS.txt` and verifies the correct checksum for each architecture.
 
 **Architecture**: The fetch script auto-detects architecture:
 - Apple Silicon (M1/M2/M3): Downloads `linux.arm64` binary
 - Intel/AMD: Downloads `linux.x86_64` binary
-
-**Note:** `GODOT_SHA256` is version-specific. Each version/release combination has a different hash. If not set, verification is skipped (fine for development).
 
 ### Skill: Adding a New Allowed Domain
 
@@ -472,14 +456,11 @@ docker compose -f compose/compose.base.yml logs dnsfilter
 # Should show: "CoreDNS-1.11.1" and "linux/arm64, go1.20.7"
 ```
 
-### Critical Issue #3: Don't Build Locally, Use Pre-built Image
+### Critical Issue #3: Prefer Pre-built Image Over Local Builds
 
-**Problem**: Running `make build` fails with GODOT_SHA256 errors
+**Recommendation**: Pull from GHCR instead of building locally
 
-**Why This Happens**: The build process needs:
-- Exact SHA256 checksum of the Godot binary (optional but recommended)
-- The checksum isn't in the repo (intentionally - it changes per Godot version)
-- Building locally takes time and requires network access
+**Why**: Building locally takes time and requires network access. The pre-built image is already tested and available.
 
 **Better Solution**: Pull from GitHub Container Registry instead of building:
 

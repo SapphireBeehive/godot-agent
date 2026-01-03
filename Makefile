@@ -14,7 +14,6 @@
 # Configuration (can be overridden: make build GODOT_VERSION=4.4)
 GODOT_VERSION ?= 4.6
 GODOT_RELEASE_TYPE ?= beta2
-GODOT_SHA256 ?=
 PROJECT_PATH ?=
 STAGING_PATH ?=
 LIVE_PATH ?=
@@ -76,13 +75,11 @@ auth-setup-token: ## Generate Claude Max OAuth token
 build: ## Build the agent container image
 	@GODOT_VERSION=$(GODOT_VERSION) \
 	 GODOT_RELEASE_TYPE=$(GODOT_RELEASE_TYPE) \
-	 GODOT_SHA256=$(GODOT_SHA256) \
 	 ./$(SCRIPT_DIR)/build.sh
 
 build-no-cache: ## Build image without cache
 	@GODOT_VERSION=$(GODOT_VERSION) \
 	 GODOT_RELEASE_TYPE=$(GODOT_RELEASE_TYPE) \
-	 GODOT_SHA256=$(GODOT_SHA256) \
 	 ./$(SCRIPT_DIR)/build.sh --no-cache
 
 validate: ## Validate compose configuration
@@ -330,7 +327,6 @@ config: ## Show current configuration
 	@echo "Configuration:"
 	@echo "  GODOT_VERSION:      $(GODOT_VERSION)"
 	@echo "  GODOT_RELEASE_TYPE: $(GODOT_RELEASE_TYPE)"
-	@echo "  GODOT_SHA256:       $(if $(GODOT_SHA256),$(GODOT_SHA256),(not set))"
 	@echo "  PROJECT_PATH:       $(if $(PROJECT_PATH),$(PROJECT_PATH),(not set))"
 	@echo "  STAGING_PATH:       $(if $(STAGING_PATH),$(STAGING_PATH),(not set))"
 	@echo "  LIVE_PATH:          $(if $(LIVE_PATH),$(LIVE_PATH),(not set))"

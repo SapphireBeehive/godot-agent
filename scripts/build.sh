@@ -4,7 +4,8 @@
 # Usage:
 #   ./scripts/build.sh
 #   ./scripts/build.sh --no-cache
-#   GODOT_SHA256=abc123 ./scripts/build.sh
+#
+# Checksum verification is automatic using Godot's official SHA512-SUMS.txt
 
 set -euo pipefail
 
@@ -45,19 +46,9 @@ echo ""
 echo "Configuration:"
 echo "  GODOT_VERSION:      $GODOT_VERSION"
 echo "  GODOT_RELEASE_TYPE: $GODOT_RELEASE_TYPE"
-echo "  GODOT_SHA256:       ${GODOT_SHA256:-(not set - verification skipped)}"
 echo ""
-
-# Info about missing checksum (optional, not required)
-if [[ -z "${GODOT_SHA256:-}" ]]; then
-    log_warn "GODOT_SHA256 not set - checksum verification will be skipped"
-    echo ""
-    echo "For production builds, set the SHA256 for Godot ${GODOT_VERSION}-${GODOT_RELEASE_TYPE}:"
-    echo "  1. Download: https://github.com/godotengine/godot/releases/download/${GODOT_VERSION}-${GODOT_RELEASE_TYPE}/"
-    echo "  2. Get hash: sha256sum Godot_v${GODOT_VERSION}-${GODOT_RELEASE_TYPE}_linux.x86_64.zip"
-    echo "  3. Build:    GODOT_SHA256=<hash> make build"
-    echo ""
-fi
+echo "Checksum: Auto-verified using Godot's official SHA512-SUMS.txt"
+echo ""
 
 log_info "Building image..."
 
@@ -67,7 +58,6 @@ docker build \
     $NO_CACHE \
     --build-arg "GODOT_VERSION=${GODOT_VERSION}" \
     --build-arg "GODOT_RELEASE_TYPE=${GODOT_RELEASE_TYPE}" \
-    --build-arg "GODOT_SHA256=${GODOT_SHA256:-}" \
     -t claude-godot-agent:latest \
     -t "claude-godot-agent:${GODOT_VERSION}" \
     .

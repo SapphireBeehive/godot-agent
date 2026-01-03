@@ -415,12 +415,6 @@ Set these in your repository settings:
 | `DOCKERHUB_USERNAME` | Optional | For also pushing to Docker Hub |
 | `DOCKERHUB_TOKEN` | Optional | Docker Hub access token |
 
-**Variables** (Settings → Secrets and variables → Actions → Variables):
-
-| Variable | Required | Description |
-|----------|----------|-------------|
-| `GODOT_SHA256` | Optional | SHA256 checksum for Godot binary verification |
-
 **Environment** (Settings → Environments):
 
 Create a `production` environment for the build-and-push workflow. Optionally add required reviewers for deployment approval gates.
@@ -474,7 +468,50 @@ jobs:
 
 ### Multi-Architecture Builds
 
-The GitHub Action builds for both architectures automatically. For manual multi-arch builds:
+The GitHub Action builds for both architectures automatically with automatic checksum verification:
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                    GitHub Actions Workflow                       │
+│                 platforms: linux/amd64,linux/arm64               │
+└─────────────────────────────────────────────────────────────────┘
+                              │
+            ┌─────────────────┴─────────────────┐
+            ▼                                   ▼
+   ┌─────────────────┐                 ┌─────────────────┐
+   │  linux/amd64    │                 │  linux/arm64    │
+   │  (x86_64)       │                 │  (Apple Silicon)│
+   └────────┬────────┘                 └────────┬────────┘
+            │                                   │
+            ▼                                   ▼
+   ┌─────────────────┐                 ┌─────────────────┐
+   │ fetch_godot.sh  │                 │ fetch_godot.sh  │
+   │ detects x86_64  │                 │ detects arm64   │
+   └────────┬────────┘                 └────────┬────────┘
+            │                                   │
+            ▼                                   ▼
+   ┌─────────────────────────────────────────────────────┐
+   │         Downloads SHA512-SUMS.txt (same file)       │
+   │  Contains official checksums for ALL architectures  │
+   └─────────────────────────────────────────────────────┘
+            │                                   │
+            ▼                                   ▼
+   ┌─────────────────┐                 ┌─────────────────┐
+   │ Downloads:      │                 │ Downloads:      │
+   │ ...x86_64.zip   │                 │ ...arm64.zip    │
+   │ Auto-verifies   │                 │ Auto-verifies   │
+   │ with SHA512     │                 │ with SHA512     │
+   └─────────────────┘                 └─────────────────┘
+```
+
+**How it works:**
+1. Docker buildx runs parallel builds for each architecture
+2. Each container detects its own architecture via `uname -m`
+3. Downloads the correct arch-specific Godot binary
+4. Fetches Godot's official `SHA512-SUMS.txt` from the release
+5. Automatically extracts and verifies the correct checksum
+
+For manual multi-arch builds:
 
 ```bash
 # Set up buildx
@@ -501,20 +538,6 @@ Recommended workflow for hybrid local/cloud development:
 ## Troubleshooting
 
 ### Common Issues
-
-**"GODOT_SHA256 not set - checksum verification will be skipped"** (warning, not error)
-
-The build will proceed without checksum verification. SHA256 is optional but recommended for production. Note: The checksum is **version-specific** - each Godot version has a different hash.
-
-```bash
-# Get checksum for the specific version you're building
-VERSION="4.6-beta2"  # Change to match your GODOT_VERSION-GODOT_RELEASE_TYPE
-curl -LO "https://github.com/godotengine/godot/releases/download/${VERSION}/Godot_v${VERSION}_linux.x86_64.zip"
-sha256sum "Godot_v${VERSION}_linux.x86_64.zip"
-
-# Build with checksum verification
-GODOT_SHA256=<the_checksum> make build
-```
 
 **"Docker daemon is not running"**
 ```bash
