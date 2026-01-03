@@ -12,6 +12,11 @@
 
 set -euo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
+COMPOSE_DIR="${PROJECT_ROOT}/compose"
+LOGS_DIR="${PROJECT_ROOT}/logs"
+
 # Colors for output
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -119,6 +124,9 @@ fi
 CONTAINER_PROJECT=$(docker exec agent pwd 2>/dev/null || echo "/project")
 log_info "Agent container is running (workdir: ${CONTAINER_PROJECT})"
 
+# Create logs directory
+mkdir -p "$LOGS_DIR"
+
 # Detect TTY availability for docker exec flags
 # When running from non-interactive contexts (CI, scripts, automation),
 # -it flags will fail with "the input device is not a TTY"
@@ -142,24 +150,89 @@ if [[ "$PRINT_MODE" == "true" ]]; then
 fi
 
 if [[ "$OPEN_SHELL" == "true" ]]; then
-    # Open bash shell
+    # Open bash shell (no logging for shell sessions)
     log_info "Opening bash shell in agent container..."
     # shellcheck disable=SC2086
     exec docker exec $TTY_FLAGS agent bash
 elif [[ -n "$PROMPT" ]]; then
-    # Run single prompt
+    # Run single prompt with logging
+    TIMESTAMP=$(date +%Y%m%d_%H%M%S)
+    LOG_FILE="${LOGS_DIR}/claude_prompt_${TIMESTAMP}.log"
+    
     if [[ "$PRINT_MODE" != "true" ]]; then
         echo -e "${CYAN}Prompt:${NC} $PROMPT"
+        echo -e "${GREEN}Logging to:${NC} $LOG_FILE"
         echo ""
     fi
+    
+    # Write session header to log
+    {
+        echo "=== Claude Prompt Session ==="
+        echo "Timestamp: $(date)"
+        echo "Prompt: $PROMPT"
+        echo "Mode: $([ "$PRINT_MODE" == "true" ] && echo "print" || echo "interactive")"
+        echo "=========================="
+        echo ""
+    } >> "$LOG_FILE"
+    
+    # Execute and capture output
     # shellcheck disable=SC2086
-    exec docker exec $TTY_FLAGS agent claude $CLAUDE_ARGS "$PROMPT"
+    docker exec $TTY_FLAGS agent claude $CLAUDE_ARGS "$PROMPT" 2>&1 | tee -a "$LOG_FILE"
+    EXIT_STATUS=${PIPESTATUS[0]}
+    
+    # Write session footer to log
+    {
+        echo ""
+        echo "=== Session Ended ==="
+        echo "Timestamp: $(date)"
+        echo "Exit status: $EXIT_STATUS"
+        echo "==================="
+    } >> "$LOG_FILE"
+    
+    if [[ "$PRINT_MODE" != "true" ]]; then
+        echo ""
+        log_info "Logs saved to: $LOG_FILE"
+    fi
+    
+    exit $EXIT_STATUS
 else
     # Interactive Claude session
+    TIMESTAMP=$(date +%Y%m%d_%H%M%S)
+    LOG_FILE="${LOGS_DIR}/claude_interactive_${TIMESTAMP}.log"
+    
     log_info "Starting interactive Claude session..."
+    log_info "Logging to: $LOG_FILE"
     echo -e "${YELLOW}Tip:${NC} Type 'exit' or Ctrl+D to leave Claude"
     echo ""
+    
+    # Write session header to log
+    {
+        echo "=== Claude Interactive Session ==="
+        echo "Timestamp: $(date)"
+        echo "Mode: interactive"
+        echo "================================"
+        echo ""
+    } >> "$LOG_FILE"
+    
+    # For interactive sessions, we can't easily capture all output without interfering
+    # So we'll log that the session started and use docker logs for full output
+    log_info "Note: Full session output available via: docker logs agent"
+    log_info "This log file will record session start/end times only."
+    echo ""
+    
+    # Execute interactive session (output goes to terminal, not log file)
     # shellcheck disable=SC2086
-    exec docker exec $TTY_FLAGS agent claude $CLAUDE_ARGS
+    docker exec $TTY_FLAGS agent claude $CLAUDE_ARGS
+    
+    # Write session footer to log
+    {
+        echo ""
+        echo "=== Session Ended ==="
+        echo "Timestamp: $(date)"
+        echo "==================="
+    } >> "$LOG_FILE"
+    
+    log_info "Session ended. Log file: $LOG_FILE"
+    log_info "For full output, see: docker logs agent"
 fi
 
