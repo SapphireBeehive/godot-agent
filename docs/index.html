@@ -1,0 +1,938 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Godot Agent - Secure AI Sandbox for Game Development</title>
+  <meta name="description" content="A secure, sandboxed Docker environment for running Claude Code with Godot game development projects.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Outfit:wght@300;400;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg-dark: #0a0e14;
+      --bg-card: #0d1117;
+      --bg-elevated: #161b22;
+      --border: #21262d;
+      --text-primary: #e6edf3;
+      --text-secondary: #8b949e;
+      --text-muted: #484f58;
+      --accent-cyan: #00d9ff;
+      --accent-green: #39d353;
+      --accent-orange: #f78166;
+      --accent-purple: #a371f7;
+      --godot-blue: #478cbf;
+      --glow-cyan: rgba(0, 217, 255, 0.15);
+      --glow-green: rgba(57, 211, 83, 0.15);
+    }
+
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    html {
+      scroll-behavior: smooth;
+    }
+
+    body {
+      font-family: 'Outfit', -apple-system, BlinkMacSystemFont, sans-serif;
+      background: var(--bg-dark);
+      color: var(--text-primary);
+      line-height: 1.6;
+      overflow-x: hidden;
+    }
+
+    /* Grid background */
+    .grid-bg {
+      position: fixed;
+      inset: 0;
+      background-image: 
+        linear-gradient(rgba(0, 217, 255, 0.03) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(0, 217, 255, 0.03) 1px, transparent 1px);
+      background-size: 60px 60px;
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    .grid-bg::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: radial-gradient(ellipse at 50% 0%, var(--glow-cyan) 0%, transparent 60%);
+    }
+
+    /* Navigation */
+    nav {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      z-index: 100;
+      padding: 1rem 2rem;
+      background: rgba(10, 14, 20, 0.8);
+      backdrop-filter: blur(12px);
+      border-bottom: 1px solid var(--border);
+    }
+
+    nav .container {
+      max-width: 1200px;
+      margin: 0 auto;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .logo {
+      font-family: 'JetBrains Mono', monospace;
+      font-weight: 700;
+      font-size: 1.25rem;
+      color: var(--accent-cyan);
+      text-decoration: none;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    .logo-icon {
+      width: 28px;
+      height: 28px;
+      background: linear-gradient(135deg, var(--accent-cyan), var(--godot-blue));
+      border-radius: 6px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 14px;
+    }
+
+    nav ul {
+      display: flex;
+      gap: 2rem;
+      list-style: none;
+    }
+
+    nav a {
+      color: var(--text-secondary);
+      text-decoration: none;
+      font-weight: 500;
+      font-size: 0.95rem;
+      transition: color 0.2s;
+    }
+
+    nav a:hover {
+      color: var(--accent-cyan);
+    }
+
+    .nav-cta {
+      background: var(--accent-cyan);
+      color: var(--bg-dark) !important;
+      padding: 0.5rem 1rem;
+      border-radius: 6px;
+      font-weight: 600;
+    }
+
+    .nav-cta:hover {
+      background: #33e0ff;
+      color: var(--bg-dark) !important;
+    }
+
+    /* Hero */
+    .hero {
+      position: relative;
+      z-index: 1;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      padding: 8rem 2rem 4rem;
+    }
+
+    .hero .container {
+      max-width: 1200px;
+      margin: 0 auto;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 4rem;
+      align-items: center;
+    }
+
+    .hero-content h1 {
+      font-size: clamp(2.5rem, 5vw, 4rem);
+      font-weight: 700;
+      line-height: 1.1;
+      margin-bottom: 1.5rem;
+    }
+
+    .hero-content h1 span {
+      background: linear-gradient(135deg, var(--accent-cyan), var(--godot-blue));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    .hero-content p {
+      font-size: 1.25rem;
+      color: var(--text-secondary);
+      margin-bottom: 2rem;
+      max-width: 500px;
+    }
+
+    .hero-buttons {
+      display: flex;
+      gap: 1rem;
+      flex-wrap: wrap;
+    }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.875rem 1.5rem;
+      border-radius: 8px;
+      font-weight: 600;
+      font-size: 1rem;
+      text-decoration: none;
+      transition: all 0.2s;
+      border: none;
+      cursor: pointer;
+    }
+
+    .btn-primary {
+      background: var(--accent-cyan);
+      color: var(--bg-dark);
+    }
+
+    .btn-primary:hover {
+      background: #33e0ff;
+      transform: translateY(-2px);
+      box-shadow: 0 8px 30px var(--glow-cyan);
+    }
+
+    .btn-secondary {
+      background: var(--bg-elevated);
+      color: var(--text-primary);
+      border: 1px solid var(--border);
+    }
+
+    .btn-secondary:hover {
+      border-color: var(--accent-cyan);
+      background: var(--bg-card);
+    }
+
+    /* Terminal mockup */
+    .terminal {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      overflow: hidden;
+      box-shadow: 
+        0 0 0 1px rgba(0, 217, 255, 0.1),
+        0 20px 50px -20px rgba(0, 0, 0, 0.5);
+    }
+
+    .terminal-header {
+      background: var(--bg-elevated);
+      padding: 0.75rem 1rem;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .terminal-dot {
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+    }
+
+    .terminal-dot.red { background: #ff5f56; }
+    .terminal-dot.yellow { background: #ffbd2e; }
+    .terminal-dot.green { background: #27c93f; }
+
+    .terminal-title {
+      margin-left: auto;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.8rem;
+      color: var(--text-muted);
+    }
+
+    .terminal-body {
+      padding: 1.5rem;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.9rem;
+      line-height: 1.8;
+    }
+
+    .terminal-line {
+      opacity: 0;
+      animation: typeIn 0.3s ease forwards;
+    }
+
+    .terminal-line:nth-child(1) { animation-delay: 0.2s; }
+    .terminal-line:nth-child(2) { animation-delay: 0.4s; }
+    .terminal-line:nth-child(3) { animation-delay: 0.6s; }
+    .terminal-line:nth-child(4) { animation-delay: 0.8s; }
+    .terminal-line:nth-child(5) { animation-delay: 1s; }
+    .terminal-line:nth-child(6) { animation-delay: 1.2s; }
+    .terminal-line:nth-child(7) { animation-delay: 1.4s; }
+
+    @keyframes typeIn {
+      from {
+        opacity: 0;
+        transform: translateX(-10px);
+      }
+      to {
+        opacity: 1;
+        transform: translateX(0);
+      }
+    }
+
+    .terminal-prompt {
+      color: var(--accent-green);
+    }
+
+    .terminal-cmd {
+      color: var(--text-primary);
+    }
+
+    .terminal-comment {
+      color: var(--text-muted);
+    }
+
+    .terminal-output {
+      color: var(--text-secondary);
+    }
+
+    .terminal-success {
+      color: var(--accent-green);
+    }
+
+    /* Features section */
+    .features {
+      position: relative;
+      z-index: 1;
+      padding: 6rem 2rem;
+    }
+
+    .features .container {
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+
+    .section-header {
+      text-align: center;
+      margin-bottom: 4rem;
+    }
+
+    .section-header h2 {
+      font-size: 2.5rem;
+      margin-bottom: 1rem;
+    }
+
+    .section-header p {
+      color: var(--text-secondary);
+      font-size: 1.1rem;
+      max-width: 600px;
+      margin: 0 auto;
+    }
+
+    .features-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 1.5rem;
+    }
+
+    .feature-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 2rem;
+      transition: all 0.3s;
+    }
+
+    .feature-card:hover {
+      border-color: var(--accent-cyan);
+      transform: translateY(-4px);
+      box-shadow: 0 20px 40px -20px rgba(0, 217, 255, 0.2);
+    }
+
+    .feature-icon {
+      width: 48px;
+      height: 48px;
+      background: var(--bg-elevated);
+      border-radius: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.5rem;
+      margin-bottom: 1.25rem;
+      border: 1px solid var(--border);
+    }
+
+    .feature-card h3 {
+      font-size: 1.25rem;
+      margin-bottom: 0.75rem;
+    }
+
+    .feature-card p {
+      color: var(--text-secondary);
+      font-size: 0.95rem;
+    }
+
+    /* Architecture section */
+    .architecture {
+      position: relative;
+      z-index: 1;
+      padding: 6rem 2rem;
+      background: var(--bg-card);
+      border-top: 1px solid var(--border);
+      border-bottom: 1px solid var(--border);
+    }
+
+    .architecture .container {
+      max-width: 1000px;
+      margin: 0 auto;
+    }
+
+    .arch-diagram {
+      background: var(--bg-dark);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 2rem;
+      overflow-x: auto;
+    }
+
+    .arch-diagram pre {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.75rem;
+      line-height: 1.4;
+      color: var(--text-secondary);
+      margin: 0;
+    }
+
+    .arch-diagram .highlight {
+      color: var(--accent-cyan);
+    }
+
+    /* Modes section */
+    .modes {
+      position: relative;
+      z-index: 1;
+      padding: 6rem 2rem;
+    }
+
+    .modes .container {
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+
+    .modes-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 1.5rem;
+    }
+
+    .mode-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 2rem;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .mode-card::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 3px;
+    }
+
+    .mode-card.persistent::before {
+      background: linear-gradient(90deg, var(--accent-cyan), var(--godot-blue));
+    }
+
+    .mode-card.queue::before {
+      background: linear-gradient(90deg, var(--accent-purple), var(--accent-cyan));
+    }
+
+    .mode-card.oneshot::before {
+      background: linear-gradient(90deg, var(--accent-orange), var(--accent-purple));
+    }
+
+    .mode-badge {
+      display: inline-block;
+      padding: 0.25rem 0.75rem;
+      border-radius: 100px;
+      font-size: 0.75rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-bottom: 1rem;
+    }
+
+    .mode-card.persistent .mode-badge {
+      background: var(--glow-cyan);
+      color: var(--accent-cyan);
+    }
+
+    .mode-card.queue .mode-badge {
+      background: rgba(163, 113, 247, 0.15);
+      color: var(--accent-purple);
+    }
+
+    .mode-card.oneshot .mode-badge {
+      background: rgba(247, 129, 102, 0.15);
+      color: var(--accent-orange);
+    }
+
+    .mode-card h3 {
+      font-size: 1.5rem;
+      margin-bottom: 0.75rem;
+    }
+
+    .mode-card > p {
+      color: var(--text-secondary);
+      margin-bottom: 1.5rem;
+    }
+
+    .mode-code {
+      background: var(--bg-dark);
+      border-radius: 8px;
+      padding: 1rem;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.8rem;
+      color: var(--accent-green);
+      overflow-x: auto;
+    }
+
+    /* Quick start */
+    .quickstart {
+      position: relative;
+      z-index: 1;
+      padding: 6rem 2rem;
+      background: var(--bg-card);
+      border-top: 1px solid var(--border);
+    }
+
+    .quickstart .container {
+      max-width: 800px;
+      margin: 0 auto;
+    }
+
+    .steps {
+      display: flex;
+      flex-direction: column;
+      gap: 1.5rem;
+    }
+
+    .step {
+      display: grid;
+      grid-template-columns: 48px 1fr;
+      gap: 1.5rem;
+      align-items: start;
+    }
+
+    .step-number {
+      width: 48px;
+      height: 48px;
+      background: var(--bg-elevated);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-family: 'JetBrains Mono', monospace;
+      font-weight: 700;
+      font-size: 1.25rem;
+      color: var(--accent-cyan);
+    }
+
+    .step-content h4 {
+      font-size: 1.1rem;
+      margin-bottom: 0.5rem;
+    }
+
+    .step-content p {
+      color: var(--text-secondary);
+      font-size: 0.95rem;
+      margin-bottom: 0.75rem;
+    }
+
+    .step-code {
+      background: var(--bg-dark);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 1rem;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.85rem;
+      overflow-x: auto;
+    }
+
+    .step-code .comment {
+      color: var(--text-muted);
+    }
+
+    /* Footer */
+    footer {
+      position: relative;
+      z-index: 1;
+      padding: 3rem 2rem;
+      border-top: 1px solid var(--border);
+      text-align: center;
+    }
+
+    footer .container {
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+
+    .footer-links {
+      display: flex;
+      justify-content: center;
+      gap: 2rem;
+      margin-bottom: 1.5rem;
+      flex-wrap: wrap;
+    }
+
+    .footer-links a {
+      color: var(--text-secondary);
+      text-decoration: none;
+      font-size: 0.95rem;
+      transition: color 0.2s;
+    }
+
+    .footer-links a:hover {
+      color: var(--accent-cyan);
+    }
+
+    .footer-meta {
+      color: var(--text-muted);
+      font-size: 0.9rem;
+    }
+
+    .footer-meta a {
+      color: var(--text-secondary);
+      text-decoration: none;
+    }
+
+    .footer-meta a:hover {
+      color: var(--accent-cyan);
+    }
+
+    /* Responsive */
+    @media (max-width: 1024px) {
+      .hero .container {
+        grid-template-columns: 1fr;
+        text-align: center;
+      }
+
+      .hero-content p {
+        margin-left: auto;
+        margin-right: auto;
+      }
+
+      .hero-buttons {
+        justify-content: center;
+      }
+
+      .terminal {
+        max-width: 600px;
+        margin: 0 auto;
+      }
+
+      .features-grid,
+      .modes-grid {
+        grid-template-columns: 1fr;
+        max-width: 500px;
+        margin: 0 auto;
+      }
+    }
+
+    @media (max-width: 768px) {
+      nav ul {
+        display: none;
+      }
+
+      .hero {
+        padding: 6rem 1.5rem 3rem;
+      }
+
+      .hero-content h1 {
+        font-size: 2rem;
+      }
+
+      .terminal-body {
+        font-size: 0.75rem;
+      }
+
+      .section-header h2 {
+        font-size: 1.75rem;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="grid-bg"></div>
+
+  <nav>
+    <div class="container">
+      <a href="#" class="logo">
+        <span class="logo-icon">🎮</span>
+        godot-agent
+      </a>
+      <ul>
+        <li><a href="#features">Features</a></li>
+        <li><a href="#modes">Modes</a></li>
+        <li><a href="#quickstart">Quick Start</a></li>
+        <li><a href="https://github.com/SapphireBeehive/godot-agent" class="nav-cta">GitHub</a></li>
+      </ul>
+    </div>
+  </nav>
+
+  <section class="hero">
+    <div class="container">
+      <div class="hero-content">
+        <h1>Secure AI Sandbox for <span>Godot</span> Development</h1>
+        <p>Run Claude Code in a hardened Docker container with network allowlisting, filesystem isolation, and full Godot runtime. Build games faster, safely.</p>
+        <div class="hero-buttons">
+          <a href="https://github.com/SapphireBeehive/godot-agent" class="btn btn-primary">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/></svg>
+            Get Started
+          </a>
+          <a href="#quickstart" class="btn btn-secondary">View Docs</a>
+        </div>
+      </div>
+
+      <div class="terminal">
+        <div class="terminal-header">
+          <span class="terminal-dot red"></span>
+          <span class="terminal-dot yellow"></span>
+          <span class="terminal-dot green"></span>
+          <span class="terminal-title">Terminal — zsh</span>
+        </div>
+        <div class="terminal-body">
+          <div class="terminal-line"><span class="terminal-comment"># Start persistent agent</span></div>
+          <div class="terminal-line"><span class="terminal-prompt">❯</span> <span class="terminal-cmd">make up-agent PROJECT=~/my-game</span></div>
+          <div class="terminal-line"><span class="terminal-output">✓ Infrastructure started</span></div>
+          <div class="terminal-line"><span class="terminal-output">✓ Agent container running</span></div>
+          <div class="terminal-line">&nbsp;</div>
+          <div class="terminal-line"><span class="terminal-prompt">❯</span> <span class="terminal-cmd">make claude P="Add player movement"</span></div>
+          <div class="terminal-line"><span class="terminal-success">✓ Created player.gd with WASD controls</span></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="features" id="features">
+    <div class="container">
+      <div class="section-header">
+        <h2>Defense in Depth</h2>
+        <p>Multiple layers of security ensure Claude can only access what it needs—nothing more.</p>
+      </div>
+
+      <div class="features-grid">
+        <div class="feature-card">
+          <div class="feature-icon">🌐</div>
+          <h3>Network Allowlisting</h3>
+          <p>CoreDNS filters all DNS queries. Only GitHub, Godot docs, and Anthropic API are reachable. Everything else gets NXDOMAIN.</p>
+        </div>
+
+        <div class="feature-card">
+          <div class="feature-icon">📁</div>
+          <h3>Filesystem Isolation</h3>
+          <p>Only your project directory is mounted. No access to ~/.ssh, ~/.aws, or any other sensitive paths on your system.</p>
+        </div>
+
+        <div class="feature-card">
+          <div class="feature-icon">🔒</div>
+          <h3>Container Hardening</h3>
+          <p>Read-only root filesystem, dropped capabilities, non-root user, seccomp profiles, and resource limits.</p>
+        </div>
+
+        <div class="feature-card">
+          <div class="feature-icon">🎮</div>
+          <h3>Full Godot Runtime</h3>
+          <p>Godot 4.6 headless included. Validate projects, run tests, export builds—all inside the sandbox.</p>
+        </div>
+
+        <div class="feature-card">
+          <div class="feature-icon">🔑</div>
+          <h3>Git Integration</h3>
+          <p>Optional GitHub PAT support with branch protection. Direct pushes to main are blocked—changes go through PRs.</p>
+        </div>
+
+        <div class="feature-card">
+          <div class="feature-icon">📊</div>
+          <h3>Full Observability</h3>
+          <p>Session logs, DNS query logs, and proxy logs. See exactly what Claude is doing and accessing.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="architecture">
+    <div class="container">
+      <div class="section-header">
+        <h2>Network Architecture</h2>
+        <p>The agent lives in an isolated network with controlled egress through TCP proxies.</p>
+      </div>
+
+      <div class="arch-diagram">
+        <pre>
+┌─────────────────────────────────────────────────────────────────────────┐
+│                           <span class="highlight">sandbox_net</span> (No Direct Internet)              │
+│                                                                          │
+│   ┌──────────────────┐         ┌────────────────────────────────────┐   │
+│   │    <span class="highlight">dnsfilter</span>     │◄───DNS───│           AGENT CONTAINER         │   │
+│   │    (CoreDNS)     │         │   ┌────────────┐  ┌────────────┐   │   │
+│   │                  │         │   │ Claude Code│  │   Godot    │   │   │
+│   │ github.com → ✓   │         │   │    CLI     │  │  Headless  │   │   │
+│   │ evil.com   → ✗   │         │   └────────────┘  └────────────┘   │   │
+│   └──────────────────┘         └────────────────────────────────────┘   │
+│            │                                      │                      │
+│            │ Returns proxy IPs                    │ HTTPS                │
+│            ▼                                      ▼                      │
+│   ┌──────────────────────────────────────────────────────────────────┐  │
+│   │                         PROXY LAYER                               │  │
+│   │    proxy_github    proxy_godot_docs    proxy_anthropic_api       │  │
+│   └──────────────────────────────────────────────────────────────────┘  │
+│                                   │                                      │
+└───────────────────────────────────┼──────────────────────────────────────┘
+                                    │ <span class="highlight">egress_net</span> (Internet Access)
+                                    ▼
+                          ┌─────────────────────┐
+                          │  GitHub, Godot Docs │
+                          │   Anthropic API     │
+                          └─────────────────────┘
+        </pre>
+      </div>
+    </div>
+  </section>
+
+  <section class="modes" id="modes">
+    <div class="container">
+      <div class="section-header">
+        <h2>Choose Your Workflow</h2>
+        <p>Three modes for different use cases—from interactive development to batch processing.</p>
+      </div>
+
+      <div class="modes-grid">
+        <div class="mode-card persistent">
+          <span class="mode-badge">Recommended</span>
+          <h3>Persistent Mode</h3>
+          <p>Keep the agent running for instant Claude access. Context persists across commands.</p>
+          <div class="mode-code">
+            make up-agent PROJECT=~/game<br>
+            make claude P="Add jump"<br>
+            make claude P="Fix bug"<br>
+            make down-agent
+          </div>
+        </div>
+
+        <div class="mode-card queue">
+          <span class="mode-badge">Async</span>
+          <h3>Queue Mode</h3>
+          <p>Drop task files in a directory and walk away. Perfect for overnight batch processing.</p>
+          <div class="mode-code">
+            make queue-start PROJECT=~/game<br>
+            echo "Add AI" > .claude/queue/001.md<br>
+            make queue-status<br>
+            make queue-stop
+          </div>
+        </div>
+
+        <div class="mode-card oneshot">
+          <span class="mode-badge">Isolated</span>
+          <h3>One-Shot Mode</h3>
+          <p>Fresh container each time. Maximum isolation for untrusted tasks or testing.</p>
+          <div class="mode-code">
+            make run-direct PROJECT=~/game<br>
+            <span style="color: var(--text-muted)"># or for extra safety:</span><br>
+            make run-staging STAGING=~/staging<br>
+            make run-offline PROJECT=~/game
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="quickstart" id="quickstart">
+    <div class="container">
+      <div class="section-header">
+        <h2>Quick Start</h2>
+        <p>Get up and running in under 5 minutes.</p>
+      </div>
+
+      <div class="steps">
+        <div class="step">
+          <div class="step-number">1</div>
+          <div class="step-content">
+            <h4>Clone the Repository</h4>
+            <div class="step-code">
+              git clone https://github.com/SapphireBeehive/godot-agent.git<br>
+              cd godot-agent
+            </div>
+          </div>
+        </div>
+
+        <div class="step">
+          <div class="step-number">2</div>
+          <div class="step-content">
+            <h4>Configure Authentication</h4>
+            <p>Set up your Claude credentials (Claude Max or API key)</p>
+            <div class="step-code">
+              cp .env.example .env<br>
+              <span class="comment"># For Claude Max subscription:</span><br>
+              claude setup-token<br>
+              <span class="comment"># Add token to .env: CLAUDE_CODE_OAUTH_TOKEN=sk-ant-...</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="step">
+          <div class="step-number">3</div>
+          <div class="step-content">
+            <h4>Verify Environment</h4>
+            <div class="step-code">
+              make doctor<br>
+              make auth
+            </div>
+          </div>
+        </div>
+
+        <div class="step">
+          <div class="step-number">4</div>
+          <div class="step-content">
+            <h4>Start Building</h4>
+            <p>Launch the persistent agent with your Godot project</p>
+            <div class="step-code">
+              make build<br>
+              make up-agent PROJECT=/path/to/your/godot/project<br>
+              make claude P="What's in this project?"
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <footer>
+    <div class="container">
+      <div class="footer-links">
+        <a href="https://github.com/SapphireBeehive/godot-agent">GitHub</a>
+        <a href="https://github.com/SapphireBeehive/godot-agent/blob/main/README.md">Documentation</a>
+        <a href="https://github.com/SapphireBeehive/godot-agent/blob/main/SECURITY.md">Security</a>
+        <a href="https://github.com/SapphireBeehive/godot-agent/blob/main/CONTRIBUTING.md">Contributing</a>
+        <a href="https://github.com/SapphireBeehive/godot-agent/issues">Issues</a>
+      </div>
+      <div class="footer-meta">
+        MIT License · Built for <a href="https://godotengine.org">Godot</a> + <a href="https://www.anthropic.com/claude">Claude</a>
+      </div>
+    </div>
+  </footer>
+</body>
+</html>
+
