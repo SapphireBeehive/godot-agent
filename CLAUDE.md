@@ -23,7 +23,8 @@ ghcr.io/sapphirebeehive/claude-godot-agent
 | Tag | Example | Description |
 |-----|---------|-------------|
 | `latest` | `:latest` | Most recent build from main branch |
-| `godot-X.Y` | `:godot-4.6` | Tagged by Godot version |
+| `godot-X.Y-TYPE` | `:godot-4.6-beta2` | Tagged by Godot version + release type |
+| `claude-X.Y.Z` | `:claude-2.0.76` | Tagged by Claude Code version |
 | `YYYYMMDD` | `:20250102` | Tagged by build date |
 | `sha-XXXXXX` | `:sha-a1b2c3d` | Tagged by git commit SHA |
 

@@ -214,7 +214,7 @@ clean-all: down-volumes clean ## Stop services, remove volumes and logs
 clean-images: ## Remove agent images
 	@echo "Removing claude-godot-agent images..."
 	@docker rmi claude-godot-agent:latest 2>/dev/null || true
-	@docker rmi claude-godot-agent:$(GODOT_VERSION) 2>/dev/null || true
+	@docker rmi claude-godot-agent:godot-$(GODOT_VERSION)-$(GODOT_RELEASE_TYPE) 2>/dev/null || true
 	@echo "Done."
 
 #==============================================================================

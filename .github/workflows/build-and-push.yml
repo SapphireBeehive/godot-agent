@@ -85,6 +85,14 @@ jobs:
           username: ${{ env.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
+      - name: Get Claude Code version
+        id: claude
+        run: |
+          # Get latest Claude Code version from npm
+          CLAUDE_VERSION=$(npm view @anthropic-ai/claude-code version 2>/dev/null || echo "unknown")
+          echo "version=${CLAUDE_VERSION}" >> $GITHUB_OUTPUT
+          echo "Claude Code version: ${CLAUDE_VERSION}"
+
       - name: Extract metadata for Docker
         id: meta
         uses: docker/metadata-action@v5
@@ -92,8 +100,10 @@ jobs:
           images: |
             ${{ env.REGISTRY }}/${{ steps.image.outputs.name }}
           tags: |
-            # Tag with Godot version
-            type=raw,value=godot-${{ env.GODOT_VERSION }}
+            # Tag with full Godot version (e.g., godot-4.6-beta2)
+            type=raw,value=godot-${{ env.GODOT_VERSION }}-${{ env.GODOT_RELEASE_TYPE }}
+            # Tag with Claude Code version
+            type=raw,value=claude-${{ steps.claude.outputs.version }}
             # Tag with git SHA
             type=sha,prefix=
             # Tag with date

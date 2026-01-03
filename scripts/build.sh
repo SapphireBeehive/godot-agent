@@ -54,12 +54,15 @@ log_info "Building image..."
 
 cd "$IMAGE_DIR"
 
+# Build the full version tag (e.g., 4.6-beta2 or 4.5-stable)
+GODOT_FULL_VERSION="${GODOT_VERSION}-${GODOT_RELEASE_TYPE}"
+
 docker build \
     $NO_CACHE \
     --build-arg "GODOT_VERSION=${GODOT_VERSION}" \
     --build-arg "GODOT_RELEASE_TYPE=${GODOT_RELEASE_TYPE}" \
     -t claude-godot-agent:latest \
-    -t "claude-godot-agent:${GODOT_VERSION}" \
+    -t "claude-godot-agent:godot-${GODOT_FULL_VERSION}" \
     .
 
 log_info "Build complete!"
