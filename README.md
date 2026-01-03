@@ -1,7 +1,7 @@
 # Claude-Godot Sandbox
 
-[![CI](https://github.com/YOUR_USERNAME/claude-godot-sandbox/actions/workflows/ci.yml/badge.svg)](https://github.com/YOUR_USERNAME/claude-godot-sandbox/actions/workflows/ci.yml)
-[![Build and Push](https://github.com/YOUR_USERNAME/claude-godot-sandbox/actions/workflows/build-and-push.yml/badge.svg)](https://github.com/YOUR_USERNAME/claude-godot-sandbox/actions/workflows/build-and-push.yml)
+[![CI](https://github.com/SapphireBeehive/godot-agent/actions/workflows/ci.yml/badge.svg)](https://github.com/SapphireBeehive/godot-agent/actions/workflows/ci.yml)
+[![Build and Push](https://github.com/SapphireBeehive/godot-agent/actions/workflows/build-and-push.yml/badge.svg)](https://github.com/SapphireBeehive/godot-agent/actions/workflows/build-and-push.yml)
 
 A secure, sandboxed environment for running Claude Code with Godot game development projects on Apple Silicon Macs.
 
@@ -102,8 +102,8 @@ If you experience file sync issues, try adding your project directory to Docker 
 
 ```bash
 # 1. Clone this repository
-git clone https://github.com/your-org/claude-godot-sandbox.git
-cd claude-godot-sandbox
+git clone https://github.com/your-org/godot-agent.git
+cd godot-agent
 
 # 2. Create environment file
 cp .env.example .env
@@ -311,17 +311,17 @@ This repository includes GitHub Actions that automatically build and push images
 
 ```bash
 # Pull the latest image (multi-arch: works on both arm64 and amd64)
-docker pull ghcr.io/YOUR_USERNAME/claude-godot-agent:latest
+docker pull ghcr.io/SapphireBeehive/claude-godot-agent:latest
 
 # Or pull a specific version
-docker pull ghcr.io/YOUR_USERNAME/claude-godot-agent:godot-4.3
+docker pull ghcr.io/SapphireBeehive/claude-godot-agent:godot-4.3
 ```
 
 To use the pre-built image instead of building locally, update your `.env`:
 
 ```bash
 # Use pre-built image from GHCR
-AGENT_IMAGE=ghcr.io/YOUR_USERNAME/claude-godot-agent:latest
+AGENT_IMAGE=ghcr.io/SapphireBeehive/claude-godot-agent:latest
 ```
 
 ### GitHub Actions Setup
@@ -369,7 +369,7 @@ jobs:
         run: |
           docker run --rm \
             -v ${{ github.workspace }}:/project \
-            ghcr.io/YOUR_USERNAME/claude-godot-agent:latest \
+            ghcr.io/SapphireBeehive/claude-godot-agent:latest \
             godot --headless --validate-project
 ```
 
@@ -461,7 +461,7 @@ chmod +x scripts/*.sh
 ### Project Structure
 
 ```
-claude-godot-sandbox/
+godot-agent/
 ├── .github/
 │   └── workflows/
 │       ├── build-and-push.yml  # Build + push on merge to main
