@@ -8,7 +8,8 @@
         build-no-cache restart status ci ci-validate ci-build ci-list ci-dry-run \
         auth auth-status auth-setup-token install-hooks install-tests \
         test-security test-dns test-network test-hardening test-filesystem test-offline \
-        up-agent down-agent claude claude-shell agent-status
+        up-agent down-agent claude claude-shell agent-status \
+        queue-start queue-stop queue-status queue-logs queue-add queue-init queue-results
 
 # Default target
 .DEFAULT_GOAL := help
@@ -99,6 +100,8 @@ validate: ## Validate compose configuration
 		echo "✓ compose.staging.yml is valid"
 	@cd $(COMPOSE_DIR) && docker compose -f compose.base.yml -f compose.persistent.yml config --quiet && \
 		echo "✓ compose.persistent.yml is valid"
+	@cd $(COMPOSE_DIR) && docker compose -f compose.base.yml -f compose.queue.yml config --quiet && \
+		echo "✓ compose.queue.yml is valid"
 	@cd $(COMPOSE_DIR) && docker compose -f compose.offline.yml config --quiet && \
 		echo "✓ compose.offline.yml is valid"
 	@echo "All compose files valid!"
@@ -185,6 +188,105 @@ endif
 
 claude-shell: ## Open bash shell in running agent
 	@./$(SCRIPT_DIR)/claude-exec.sh --shell
+
+#==============================================================================
+# QUEUE MODE (async task processing)
+#==============================================================================
+
+queue-start: _check-project _check-auth ## Start queue processor daemon (PROJECT=/path)
+	@echo "Starting infrastructure services..."
+	@./$(SCRIPT_DIR)/up.sh
+	@echo ""
+	@echo "Initializing queue directories..."
+	@mkdir -p "$(PROJECT_PATH)/.claude/queue"
+	@mkdir -p "$(PROJECT_PATH)/.claude/completed"
+	@mkdir -p "$(PROJECT_PATH)/.claude/failed"
+	@mkdir -p "$(PROJECT_PATH)/.claude/results"
+	@echo ""
+	@echo "Starting queue processor daemon..."
+	@cd $(COMPOSE_DIR) && PROJECT_PATH=$(PROJECT_PATH) \
+		docker compose -f compose.base.yml -f compose.queue.yml up -d agent
+	@echo ""
+	@echo "Queue processor running!"
+	@echo ""
+	@echo "Add tasks:"
+	@echo "  make queue-add TASK=\"your prompt\" NAME=001-task PROJECT=$(PROJECT_PATH)"
+	@echo "  echo \"prompt\" > $(PROJECT_PATH)/.claude/queue/001-task.md"
+	@echo ""
+	@echo "Monitor:"
+	@echo "  make queue-status PROJECT=$(PROJECT_PATH)"
+	@echo "  make queue-logs"
+
+queue-stop: ## Stop queue processor daemon
+	@echo "Stopping queue processor..."
+	@cd $(COMPOSE_DIR) && docker compose -f compose.base.yml -f compose.queue.yml down
+	@echo "Queue processor stopped."
+
+queue-status: _check-project ## Show queue status (PROJECT=/path)
+	@echo "╔══════════════════════════════════════════════════════════════════════╗"
+	@echo "║                         Queue Status                                 ║"
+	@echo "╚══════════════════════════════════════════════════════════════════════╝"
+	@echo ""
+	@echo "📬 Pending tasks:"
+	@ls -1 "$(PROJECT_PATH)/.claude/queue/"*.md "$(PROJECT_PATH)/.claude/queue/"*.txt 2>/dev/null | \
+		while read f; do echo "   - $$(basename $$f)"; done || echo "   (none)"
+	@echo ""
+	@echo "⚙️  Processing:"
+	@ls -1 "$(PROJECT_PATH)/.claude/processing/"*.md "$(PROJECT_PATH)/.claude/processing/"*.txt 2>/dev/null | \
+		while read f; do echo "   - $$(basename $$f)"; done || echo "   (none)"
+	@echo ""
+	@echo "✅ Completed (last 5):"
+	@ls -1t "$(PROJECT_PATH)/.claude/completed/"*.md "$(PROJECT_PATH)/.claude/completed/"*.txt 2>/dev/null | \
+		head -5 | while read f; do echo "   - $$(basename $$f)"; done || echo "   (none)"
+	@echo ""
+	@echo "❌ Failed:"
+	@ls -1 "$(PROJECT_PATH)/.claude/failed/"*.md "$(PROJECT_PATH)/.claude/failed/"*.txt 2>/dev/null | \
+		while read f; do echo "   - $$(basename $$f)"; done || echo "   (none)"
+	@echo ""
+	@if docker ps --format '{{.Names}}' 2>/dev/null | grep -q '^agent$$'; then \
+		echo "🟢 Queue processor: RUNNING"; \
+	else \
+		echo "🔴 Queue processor: NOT RUNNING"; \
+	fi
+
+queue-logs: ## Follow queue processor logs
+	@cd $(COMPOSE_DIR) && docker compose -f compose.base.yml -f compose.queue.yml logs -f agent
+
+queue-add: _check-project ## Add task to queue (TASK="prompt" NAME=001-name PROJECT=/path)
+ifndef TASK
+	@echo "Error: TASK is required"
+	@echo "Usage: make queue-add TASK=\"your prompt here\" NAME=001-taskname PROJECT=/path"
+	@exit 1
+endif
+	$(eval TASK_NAME := $(or $(NAME),$(shell date +%Y%m%d%H%M%S)))
+	@mkdir -p "$(PROJECT_PATH)/.claude/queue"
+	@echo "$(TASK)" > "$(PROJECT_PATH)/.claude/queue/$(TASK_NAME).md"
+	@echo "✅ Added task: $(PROJECT_PATH)/.claude/queue/$(TASK_NAME).md"
+	@echo ""
+	@cat "$(PROJECT_PATH)/.claude/queue/$(TASK_NAME).md"
+
+queue-init: _check-project ## Initialize queue directories (PROJECT=/path)
+	@echo "Initializing queue directories in $(PROJECT_PATH)/.claude/..."
+	@mkdir -p "$(PROJECT_PATH)/.claude/queue"
+	@mkdir -p "$(PROJECT_PATH)/.claude/processing"
+	@mkdir -p "$(PROJECT_PATH)/.claude/completed"
+	@mkdir -p "$(PROJECT_PATH)/.claude/failed"
+	@mkdir -p "$(PROJECT_PATH)/.claude/results"
+	@echo "✅ Queue directories created:"
+	@echo "   $(PROJECT_PATH)/.claude/queue/      - Drop task files here"
+	@echo "   $(PROJECT_PATH)/.claude/results/    - View execution logs"
+	@echo "   $(PROJECT_PATH)/.claude/completed/  - Completed tasks"
+	@echo "   $(PROJECT_PATH)/.claude/failed/     - Failed tasks"
+
+queue-results: _check-project ## Show latest result (PROJECT=/path)
+	@LATEST=$$(ls -1t "$(PROJECT_PATH)/.claude/results/"*.log 2>/dev/null | head -1); \
+	if [ -n "$$LATEST" ]; then \
+		echo "Latest result: $$LATEST"; \
+		echo ""; \
+		cat "$$LATEST"; \
+	else \
+		echo "No results yet."; \
+	fi
 
 #==============================================================================
 # GODOT OPERATIONS
@@ -457,6 +559,9 @@ l: logs
 r: logs-report
 c: claude
 a: agent-status
+q: queue-status
+qs: queue-start
+qx: queue-stop
 
 # Print configuration
 config: ## Show current configuration

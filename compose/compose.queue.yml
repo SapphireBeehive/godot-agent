@@ -1,0 +1,93 @@
+# compose.queue.yml - Agent running as async task queue processor
+# Use with: docker compose -f compose.base.yml -f compose.queue.yml up -d
+#
+# This mode runs the agent as a daemon that monitors a queue directory
+# and processes task files automatically.
+#
+# Directory structure (created automatically):
+#   /project/.claude/
+#   ├── queue/           # Drop task files here (*.md or *.txt)
+#   ├── processing/      # Currently being processed
+#   ├── completed/       # Successfully completed tasks
+#   ├── failed/          # Failed tasks
+#   └── results/         # Execution logs
+#
+# Add tasks:
+#   echo "Add player movement" > /path/to/project/.claude/queue/001-movement.md
+#
+# View results:
+#   cat /path/to/project/.claude/results/001-movement.log
+
+services:
+  agent:
+    build:
+      context: ../image
+      dockerfile: Dockerfile
+      args:
+        - GODOT_VERSION=${GODOT_VERSION:-4.6}
+        - GODOT_RELEASE_TYPE=${GODOT_RELEASE_TYPE:-beta2}
+    image: claude-godot-agent:latest
+    container_name: agent
+    
+    # Run queue watcher daemon
+    command: ["node", "/opt/scripts/queue-watcher.js"]
+    restart: unless-stopped
+    
+    # Environment
+    environment:
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+      - CLAUDE_CODE_OAUTH_TOKEN=${CLAUDE_CODE_OAUTH_TOKEN:-}
+      - HOME=/home/claude
+      - USER=claude
+      - PROJECT_DIR=/project
+      - POLL_INTERVAL=${QUEUE_POLL_INTERVAL:-5000}
+    
+    # Network: sandbox only, use dnsfilter for DNS
+    networks:
+      sandbox_net:
+        ipv4_address: 10.100.1.100
+    dns:
+      - 10.100.1.2  # dnsfilter
+    
+    # Volumes
+    volumes:
+      - ${PROJECT_PATH:-./../project}:/project:rw
+      - ../image/scripts/queue-watcher.js:/opt/scripts/queue-watcher.js:ro
+    
+    # Security hardening
+    read_only: true
+    tmpfs:
+      - /tmp:size=100M,mode=1777
+      - /home/claude:size=50M,mode=0755,uid=1000,gid=1000
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    
+    # Resource limits
+    deploy:
+      resources:
+        limits:
+          memory: ${AGENT_MEMORY_LIMIT:-2G}
+          cpus: "${AGENT_CPU_LIMIT:-2.0}"
+          pids: 256
+        reservations:
+          memory: 256M
+    
+    # Depends on infrastructure services
+    depends_on:
+      dnsfilter:
+        condition: service_started
+      proxy_github:
+        condition: service_started
+      proxy_anthropic_api:
+        condition: service_started
+    
+    # Working directory
+    working_dir: /project
+
+networks:
+  sandbox_net:
+    external: true
+    name: claude-godot-sandbox_sandbox_net
+

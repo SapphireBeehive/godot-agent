@@ -227,6 +227,10 @@ You can use either `make` targets or scripts directly:
 | `make claude` | Interactive Claude session |
 | `make claude P="..."` | Single prompt execution |
 | `make down-agent` | Stop persistent agent |
+| `make queue-start PROJECT=...` | Start async queue processor |
+| `make queue-add TASK="..." NAME=...` | Add task to queue |
+| `make queue-status PROJECT=...` | Show queue status |
+| `make queue-stop` | Stop queue processor |
 | `make run-direct PROJECT=...` | `./scripts/run-claude.sh direct ...` |
 | `make logs` | `docker compose logs -f` |
 | `make ci` | Run CI workflow locally with `act` |
@@ -283,6 +287,65 @@ make down-agent
 - No 3-5 second container startup for each interaction
 - Claude maintains conversation context across commands
 - Multiple terminal windows can attach to the same session
+
+## Queue Mode (Async Processing)
+
+Queue mode lets you add tasks to a directory and have Claude process them automatically in the background. Perfect for:
+- Batch processing multiple tasks overnight
+- Queueing work and walking away
+- Integrating with scripts and automation
+
+```bash
+# Start the queue processor
+make queue-start PROJECT=~/my-godot-game
+
+# Add tasks (multiple methods)
+make queue-add TASK="Add player movement" NAME=001-movement PROJECT=~/my-godot-game
+echo "Fix collision detection" > ~/my-godot-game/.claude/queue/002-collision.md
+
+# Check status
+make queue-status PROJECT=~/my-godot-game
+
+# View logs
+make queue-logs
+
+# View results
+cat ~/my-godot-game/.claude/results/001-movement.log
+
+# Stop when done
+make queue-stop
+```
+
+### Queue Directory Structure
+
+```
+/project/.claude/
+├── queue/           # Drop task files here (*.md or *.txt)
+├── processing/      # Currently being processed
+├── completed/       # Successfully completed tasks
+├── failed/          # Failed tasks
+└── results/         # Execution logs
+```
+
+### Task File Format
+
+Simple text or markdown:
+
+```markdown
+# Add Player Movement
+
+Create a player.gd script with:
+- WASD movement controls
+- Gravity and jumping
+- Collision detection
+
+Attach it to the player scene.
+```
+
+Tasks are processed in alphabetical order. Use numeric prefixes for ordering:
+- `001-setup.md`
+- `002-player.md`
+- `003-enemies.md`
 
 ## Running Modes (One-shot)
 

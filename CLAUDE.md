@@ -144,6 +144,46 @@ make run-direct PROJECT=~/my-game
 make down
 ```
 
+### Skill: Queue Mode (Async Task Processing)
+
+Process tasks asynchronously while you're away:
+
+```bash
+# Start the queue processor daemon
+make queue-start PROJECT=~/my-game
+
+# Add tasks to the queue
+make queue-add TASK="Add player movement" NAME=001-movement PROJECT=~/my-game
+make queue-add TASK="Add enemy AI" NAME=002-enemies PROJECT=~/my-game
+make queue-add TASK="Create main menu" NAME=003-menu PROJECT=~/my-game
+
+# Or drop files directly
+echo "Add a health bar UI" > ~/my-game/.claude/queue/004-health.md
+
+# Check queue status
+make queue-status PROJECT=~/my-game
+
+# Watch the processor work
+make queue-logs
+
+# View results
+make queue-results PROJECT=~/my-game
+cat ~/my-game/.claude/results/001-movement.log
+
+# Stop when done
+make queue-stop
+```
+
+Queue directory structure:
+```
+/project/.claude/
+├── queue/           # Drop task files here
+├── processing/      # Currently being processed  
+├── completed/       # Successfully completed
+├── failed/          # Failed tasks
+└── results/         # Execution logs
+```
+
 ### Skill: Debugging Infrastructure Issues
 
 When things aren't working:
@@ -363,6 +403,7 @@ godot-agent/
 │   ├── compose.base.yml     # Infrastructure: DNS filter + proxy services
 │   ├── compose.direct.yml   # Agent with direct project mount (one-shot)
 │   ├── compose.persistent.yml # Agent that stays running (recommended)
+│   ├── compose.queue.yml    # Agent as async queue processor
 │   ├── compose.staging.yml  # Agent with staging directory mount
 │   └── compose.offline.yml  # Agent with no network access
 ├── configs/
@@ -402,6 +443,13 @@ godot-agent/
 | `make agent-status` | Check if agent is running |
 | `make claude-shell` | Open bash shell in agent |
 | `make down-agent` | Stop persistent agent |
+| **Queue Mode (Async)** | |
+| `make queue-start PROJECT=...` | Start queue processor daemon |
+| `make queue-add TASK="..." NAME=...` | Add task to queue |
+| `make queue-status PROJECT=...` | Show queue status |
+| `make queue-logs` | Follow queue processor logs |
+| `make queue-results PROJECT=...` | Show latest result |
+| `make queue-stop` | Stop queue processor |
 | **One-shot Mode** | |
 | `make run-direct PROJECT=...` | Run Claude in direct mode |
 | `make run-staging STAGING=...` | Run Claude in staging mode |
@@ -424,6 +472,9 @@ godot-agent/
 | `make l` | `make logs` |
 | `make c` | `make claude` |
 | `make a` | `make agent-status` |
+| `make q` | `make queue-status` |
+| `make qs` | `make queue-start` |
+| `make qx` | `make queue-stop` |
 
 ## Authentication
 
