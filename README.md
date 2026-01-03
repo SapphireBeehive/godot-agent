@@ -782,6 +782,13 @@ godot-agent/
 └── SECURITY.md
 ```
 
+## Documentation
+
+- **[Workflow Guide](docs/WORKFLOW_GUIDE.md)** - Detailed guide for Persistent and Queue modes
+- **[CLAUDE.md](CLAUDE.md)** - Context file for Claude instances
+- **[SECURITY.md](SECURITY.md)** - Threat model and security considerations
+- **[CONTRIBUTING.md](CONTRIBUTING.md)** - Contribution guidelines
+
 ## License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
