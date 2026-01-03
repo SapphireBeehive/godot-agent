@@ -302,6 +302,54 @@ Run Godot headless commands inside the sandbox:
 ./scripts/run-godot.sh /path/to/project --export-release "Linux" build/game.x86_64
 ```
 
+## Security Tests
+
+The sandbox includes comprehensive pytest-based security tests that verify all security features are properly enforced.
+
+### Running Tests
+
+```bash
+# Install test dependencies (requires uv: brew install uv)
+uv pip install -r tests/requirements.txt
+
+# Run all security tests
+make test-security
+
+# Run in parallel (faster)
+make test-security-parallel
+
+# Run specific test suites
+make test-dns          # DNS filtering
+make test-network      # Network isolation
+make test-hardening    # Container security
+make test-filesystem   # Mount restrictions
+make test-offline      # Offline mode
+```
+
+### What's Tested
+
+| Test Suite | Verifies |
+|------------|----------|
+| DNS Filtering | Allowed domains resolve to proxy IPs, blocked domains return NXDOMAIN |
+| Network Restrictions | Agent isolated to sandbox_net, cannot reach internet directly |
+| Container Hardening | Read-only rootfs, dropped capabilities, non-root user, resource limits |
+| Filesystem Restrictions | Only /project mounted, no sensitive host paths exposed |
+| Offline Mode | Zero network access with `network_mode: none` |
+
+### Test Structure
+
+```
+tests/
+├── conftest.py                  # Docker Compose fixtures
+├── test_dns_filtering.py        # DNS allowlist/blocklist
+├── test_network_restrictions.py # Network isolation
+├── test_container_hardening.py  # Security hardening
+├── test_filesystem_restrictions.py # Mount verification
+└── test_offline_mode.py         # Offline mode
+```
+
+Tests run automatically in CI on every push and pull request.
+
 ## Observability
 
 ### View Logs
@@ -400,7 +448,7 @@ The repository includes two workflows:
 
 | Workflow | Trigger | Purpose |
 |----------|---------|---------|
-| `ci.yml` | PRs, pushes | Validates compose, lints scripts, test builds |
+| `ci.yml` | PRs, pushes | Validates compose, lints scripts, test builds, security tests |
 | `build-and-push.yml` | Merge to main | Builds multi-arch image, pushes to GHCR |
 
 #### Required Setup
@@ -602,6 +650,13 @@ godot-agent/
 │   ├── doctor.sh             # Environment health check
 │   ├── up.sh / down.sh       # Service lifecycle
 │   └── build.sh              # Image builder
+├── tests/                     # Security test suite
+│   ├── conftest.py           # Docker Compose fixtures
+│   ├── test_dns_filtering.py
+│   ├── test_network_restrictions.py
+│   ├── test_container_hardening.py
+│   ├── test_filesystem_restrictions.py
+│   └── test_offline_mode.py
 ├── logs/                      # Session logs (gitignored)
 ├── Makefile                  # Convenient make targets
 ├── .env.example              # Environment template

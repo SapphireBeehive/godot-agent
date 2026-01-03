@@ -266,7 +266,7 @@ _check-docker:
 	fi
 	@if ! python3 -c "import pytest" 2>/dev/null; then \
 		echo "Error: pytest not installed"; \
-		echo "Install with: pip install -r tests/requirements.txt"; \
+		echo "Install with: uv pip install -r tests/requirements.txt"; \
 		exit 1; \
 	fi
 

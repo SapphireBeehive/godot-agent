@@ -21,12 +21,13 @@ The tests verify:
 ## Installation
 
 ```bash
-# Create virtual environment (optional but recommended)
-python3 -m venv .venv
-source .venv/bin/activate
+# Install uv if not already installed
+brew install uv
 
-# Install dependencies
-pip install -r tests/requirements.txt
+# Create virtual environment and install dependencies
+uv venv
+source .venv/bin/activate
+uv pip install -r tests/requirements.txt
 ```
 
 ## Running Tests

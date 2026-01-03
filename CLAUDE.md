@@ -192,6 +192,56 @@ make godot-doctor PROJECT=~/my-game
 make run-godot PROJECT=~/my-game ARGS="--export-release Linux build/game"
 ```
 
+### Skill: Running Security Tests
+
+The sandbox includes comprehensive security tests to verify network restrictions, container hardening, and filesystem isolation:
+
+```bash
+# Install test dependencies (requires uv)
+uv pip install -r tests/requirements.txt
+
+# Run all security tests
+make test-security
+
+# Run tests in parallel (faster)
+make test-security-parallel
+
+# Run specific test modules
+make test-dns          # DNS filtering tests
+make test-network      # Network isolation tests
+make test-hardening    # Container security tests
+make test-filesystem   # Mount/volume tests
+make test-offline      # Offline mode tests
+```
+
+#### What the tests verify:
+
+| Test Module | Verifies |
+|-------------|----------|
+| `test_dns_filtering.py` | Allowed domains → proxy IPs, blocked → NXDOMAIN |
+| `test_network_restrictions.py` | Agent isolated to sandbox_net, cannot reach internet |
+| `test_container_hardening.py` | Read-only rootfs, dropped caps, non-root user, limits |
+| `test_filesystem_restrictions.py` | Only /project mounted, no sensitive paths |
+| `test_offline_mode.py` | Zero network with network_mode: none |
+
+#### Running tests directly with pytest:
+
+```bash
+cd tests
+
+# Verbose output
+pytest -v
+
+# Stop on first failure
+pytest -x
+
+# Run specific test
+pytest test_dns_filtering.py::TestDNSAllowedDomains -v
+
+# Skip network-dependent tests (for CI without external access)
+CI_NO_NETWORK=1 pytest
+```
+
 ### Skill: Testing CI Locally
 
 Test GitHub Actions workflows without pushing:
@@ -276,6 +326,13 @@ godot-agent/
 │   ├── Dockerfile           # Agent container image
 │   └── install/             # Installation scripts for Godot and Claude Code
 ├── scripts/                 # Operational scripts (run from host)
+├── tests/                   # Security test suite (pytest)
+│   ├── conftest.py          # Docker Compose fixtures
+│   ├── test_dns_filtering.py
+│   ├── test_network_restrictions.py
+│   ├── test_container_hardening.py
+│   ├── test_filesystem_restrictions.py
+│   └── test_offline_mode.py
 ├── .github/workflows/       # CI/CD pipelines
 ├── .githooks/               # Git hooks for secret scanning
 └── logs/                    # Session logs (gitignored)
@@ -297,6 +354,7 @@ godot-agent/
 | `make scan PROJECT=...` | Scan for dangerous patterns |
 | `make validate` | Validate compose files |
 | `make test` | Run all checks |
+| `make test-security` | Run security tests |
 | `make ci` | Run CI workflow locally |
 | `make install-hooks` | Install pre-commit hooks |
 
