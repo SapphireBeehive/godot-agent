@@ -131,7 +131,10 @@ jobs:
         run: uv pip install --system -r tests/requirements.txt
 
       - name: Create test project directory
-        run: mkdir -p tests/.test-project
+        run: |
+          mkdir -p tests/.test-project
+          # Set ownership to match claude user (UID 1000) in container
+          sudo chown -R 1000:1000 tests/.test-project
 
       - name: Run security tests
         run: |
