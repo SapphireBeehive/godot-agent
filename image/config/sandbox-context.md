@@ -34,7 +34,7 @@ You are running inside a **sandboxed Docker container** with restricted network 
 | Validate project | `godot --headless --validate-project` |
 | Run tests | `godot --headless -s res://tests/test_runner.gd` |
 | Check git status | `git status && git diff` |
-| Create branch | `git checkout -b claude/issue-N-description` |
+| Create branch | `git checkout -b godot-agent/issue-N-description` |
 | View recent commits | `git log --oneline -5` |
 
 ### MCP Tool Quick Reference
@@ -73,9 +73,9 @@ You are running inside a **sandboxed Docker container** with restricted network 
 
 | Mode | Pattern | Example |
 |------|---------|---------|
-| Issue | `claude/issue-N-desc` | `claude/issue-42-add-player-dash` |
-| Queue | `claude/queue-id-desc` | `claude/queue-task001-add-dash` |
-| Prompt | `claude/prompt-desc` | `claude/prompt-refactor-inventory` |
+| Issue | `godot-agent/issue-N-desc` | `godot-agent/issue-42-add-player-dash` |
+| Queue | `godot-agent/queue-id-desc` | `godot-agent/queue-task001-add-dash` |
+| Prompt | `godot-agent/prompt-desc` | `godot-agent/prompt-refactor-inventory` |
 
 ---
 
@@ -114,11 +114,11 @@ You may be running in one of two deployment modes:
 
 **How to tell which mode you're in:**
 - Check if `/project/.git/config` remote matches `GITHUB_REPO` env var → Isolated
-- Check if there's a `claude/work-*` branch already checked out → Isolated (auto-created)
+- Check if there's a `godot-agent/work-*` branch already checked out → Isolated (auto-created)
 - If unsure, check: `git remote -v`
 
 **In Isolated Mode:**
-- You already have a working branch (`claude/work-YYYYMMDD-HHMMSS`)
+- You already have a working branch (`godot-agent/work-YYYYMMDD-HHMMSS`)
 - The repo was cloned fresh at container startup
 - Your workspace is destroyed when the container stops
 - Push your work via MCP before the container stops!
@@ -169,11 +169,11 @@ Read your prompt carefully. The request might be:
 Even without an issue, always work on a branch:
 
 ```bash
-# Branch naming for prompt tasks: claude/prompt-brief-description
-git checkout -b claude/prompt-add-player-dash
+# Branch naming for prompt tasks: godot-agent/prompt-brief-description
+git checkout -b godot-agent/prompt-add-player-dash
 
 # Or with a date for uniqueness
-git checkout -b claude/prompt-20240115-refactor-inventory
+git checkout -b godot-agent/prompt-20240115-refactor-inventory
 ```
 
 ### Step P3: Implement with Tests
@@ -215,7 +215,7 @@ git commit -m "feat: add player dash ability
 Push your work to the remote:
 
 ```bash
-git push origin claude/prompt-add-player-dash
+git push origin godot-agent/prompt-add-player-dash
 ```
 
 **Creating a PR is optional** for prompt mode—follow the instructions in your prompt. If a PR is requested:
@@ -236,7 +236,7 @@ Use create_pull_request:
       
       ## Prompt Reference
       This work was done via direct prompt request.
-  - head: claude/prompt-add-player-dash
+  - head: godot-agent/prompt-add-player-dash
   - base: main
 ```
 
@@ -253,7 +253,7 @@ At the end of your work, provide a clear summary:
 - Added test_player_dash() with 4 test cases
 
 ### Branch
-`claude/prompt-add-player-dash` pushed to origin
+`godot-agent/prompt-add-player-dash` pushed to origin
 
 ### Tests
 All 12 tests passing
@@ -268,7 +268,7 @@ All 12 tests passing
 | Step | Action | Notes |
 |------|--------|-------|
 | P1 | Understand prompt | Ask if unclear |
-| P2 | Create branch | `claude/prompt-*` naming |
+| P2 | Create branch | `godot-agent/prompt-*` naming |
 | P3 | Code + test | Tests still required! |
 | P4 | Validate | Full validation |
 | P5 | Commit | Clear, descriptive messages |
@@ -450,8 +450,8 @@ This prevents duplicate work if multiple agents are running.
 Always work on a feature branch, never on main:
 
 ```bash
-# Branch naming convention: claude/issue-N-brief-description
-git checkout -b claude/issue-42-add-player-dash
+# Branch naming convention: godot-agent/issue-N-brief-description
+git checkout -b godot-agent/issue-42-add-player-dash
 ```
 
 ### Step 4: Implement + Write Tests
@@ -507,7 +507,7 @@ Use create_pull_request:
       - All tests pass
       
       Closes #42
-  - head: claude/issue-42-add-player-dash
+  - head: godot-agent/issue-42-add-player-dash
   - base: main
 ```
 
@@ -568,7 +568,7 @@ After releasing an issue, **immediately look for more work**:
 # After releasing an issue, start fresh for the next one
 git checkout main
 git pull origin main
-git checkout -b claude/issue-NEW-description
+git checkout -b godot-agent/issue-NEW-description
 ```
 
 ### Step 9: Addressing Review Feedback
@@ -609,8 +609,8 @@ If you encounter one of your PRs with unaddressed review comments:
 
 ```bash
 # Switch to the existing PR branch
-git checkout claude/issue-42-add-player-dash
-git pull origin claude/issue-42-add-player-dash
+git checkout godot-agent/issue-42-add-player-dash
+git pull origin godot-agent/issue-42-add-player-dash
 
 # Make the requested changes
 # ... edit files ...
@@ -1039,8 +1039,8 @@ Always comment on an issue before starting work:
 Always work on a branch, never directly on main:
 
 ```bash
-# Naming: claude/issue-N-description
-git checkout -b claude/issue-15-fix-player-jump
+# Naming: godot-agent/issue-N-description
+git checkout -b godot-agent/issue-15-fix-player-jump
 ```
 
 ### 4. Commit Often
