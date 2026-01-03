@@ -1,6 +1,8 @@
 # Dockerfile for Claude-Godot Sandbox Agent
 # Provides: Godot 4.x headless + Claude Code CLI
 # Target: Linux arm64 (Apple Silicon via Docker)
+#
+# Optimized for build cache efficiency and faster rebuilds
 
 # Build arguments for version pinning
 ARG GODOT_VERSION=4.6
@@ -14,20 +16,19 @@ FROM debian:bookworm-slim AS builder
 ARG GODOT_VERSION
 ARG GODOT_RELEASE_TYPE
 
-# Install build tools
+# Install build tools and fetch Godot in a single layer for better caching
+# Copy script first (separate layer) so script changes don't invalidate apt cache
+COPY install/fetch_godot.sh /tmp/fetch_godot.sh
 # hadolint ignore=DL3008
 RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     ca-certificates \
     unzip \
-    && rm -rf /var/lib/apt/lists/*
-
-# Copy and run Godot installer
-COPY install/fetch_godot.sh /tmp/fetch_godot.sh
-RUN chmod +x /tmp/fetch_godot.sh && \
-    GODOT_VERSION=${GODOT_VERSION} \
+    && chmod +x /tmp/fetch_godot.sh \
+    && GODOT_VERSION=${GODOT_VERSION} \
     GODOT_RELEASE_TYPE=${GODOT_RELEASE_TYPE} \
-    /tmp/fetch_godot.sh
+    /tmp/fetch_godot.sh \
+    && rm -rf /var/lib/apt/lists/*
 
 # --- Stage 2: Runtime image ---
 FROM debian:bookworm-slim AS runtime
@@ -37,17 +38,8 @@ LABEL org.opencontainers.image.title="Claude-Godot Sandbox Agent"
 LABEL org.opencontainers.image.description="Sandboxed environment for Claude Code + Godot development"
 LABEL org.opencontainers.image.source="https://github.com/your-org/claude-godot-sandbox"
 
-# Install minimal runtime dependencies
-# - bash: for scripts
-# - git: for version control operations
-# - ca-certificates: for HTTPS
-# - nodejs + npm: required for Claude Code CLI (npm package)
-# - curl: for downloading assets/plugins
-# - jq: for parsing JSON configs
-# - zip/unzip: for export packages and asset packs
-# - file: for detecting file types
-# - make: for GDExtension builds
-# Note: Node.js is required because Claude Code is distributed as npm package
+# Install all runtime dependencies in a single layer
+# This layer will be cached unless dependencies change
 # hadolint ignore=DL3008
 RUN apt-get update && apt-get install -y --no-install-recommends \
     bash \
@@ -70,46 +62,38 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libxinerama1 \
     libxrandr2 \
     libxrender1 \
-    && rm -rf /var/lib/apt/lists/* \
-    && apt-get clean \
-    && rm -rf /var/cache/apt/archives/*
+    && rm -rf /var/lib/apt/lists/*
 
-# Copy Godot binary from builder
-COPY --from=builder /opt/godot /opt/godot
-COPY --from=builder /usr/local/bin/godot /usr/local/bin/godot
-
-# Create non-root user 'claude' with uid 1000
-RUN groupadd -g 1000 claude && \
-    useradd -m -u 1000 -g claude -s /bin/bash claude
-
-# Install Claude Code CLI
-# This happens after user creation so npm global packages are accessible
+# Install Claude Code CLI as root before user creation
+# This ensures npm packages are installed globally and accessible
+# Copy script first (separate layer) for better cacheability
 COPY install/install_claude_code.sh /tmp/install_claude_code.sh
 RUN chmod +x /tmp/install_claude_code.sh && \
     /tmp/install_claude_code.sh || \
     echo "WARNING: Claude Code installation incomplete - see logs above"
 
-# Create project directory
-RUN mkdir -p /project && chown claude:claude /project
+# Create user and directories in a single layer
+# This layer is stable and rarely changes
+RUN groupadd -g 1000 claude && \
+    useradd -m -u 1000 -g claude -s /bin/bash claude && \
+    mkdir -p /project /home/claude/.config /etc/claude && \
+    chown -R claude:claude /project /home/claude
 
-# Set up minimal home directory structure
-RUN mkdir -p /home/claude/.config && \
-    chown -R claude:claude /home/claude
+# Copy Godot binary from builder (after user creation for proper ownership)
+# This is version-dependent, so it changes when Godot version changes
+COPY --from=builder /opt/godot /opt/godot
+COPY --from=builder /usr/local/bin/godot /usr/local/bin/godot
 
-# Install Claude Code settings (copied to home dir at runtime via entrypoint)
-# These settings grant all permissions since security is enforced by container isolation
-RUN mkdir -p /etc/claude
-COPY config/claude-settings.json /etc/claude/settings.json
-
-# Install entrypoint script (sets up Claude config on each container start)
+# Copy entrypoint script and set permissions in one layer
+# Scripts change more frequently, so they're copied later
 COPY scripts/entrypoint.sh /usr/local/bin/entrypoint.sh
 RUN chmod +x /usr/local/bin/entrypoint.sh
 
-# Security: Remove package managers and unnecessary tools from runtime path
-# Note: We keep npm for Claude Code but could remove it post-install if needed
-# RUN rm -rf /usr/bin/apt* /usr/bin/dpkg* || true
+# Copy config files last (they change most frequently)
+# This minimizes cache invalidation when only config changes
+COPY config/claude-settings.json /etc/claude/settings.json
 
-# Set environment
+# Set environment variables (stable, rarely changes)
 ENV HOME=/home/claude
 ENV USER=claude
 ENV GODOT_PATH=/opt/godot/godot
@@ -128,4 +112,3 @@ CMD ["bash"]
 # Health check - verify core tools are available
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
     CMD godot --headless --version || exit 1
-

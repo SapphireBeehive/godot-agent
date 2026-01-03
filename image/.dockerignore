@@ -1,0 +1,44 @@
+# .dockerignore - Exclude files from Docker build context
+# This reduces build context size and improves build performance
+# Build context is the image/ directory
+
+# Documentation (not needed in image)
+*.md
+!Dockerfile*
+README*
+LICENSE
+
+# Optimization review files (not needed in image)
+DOCKERFILE_OPTIMIZATION_REVIEW.md
+Dockerfile.optimized
+
+# Temporary files
+*.tmp
+*.temp
+.DS_Store
+*.swp
+*.swo
+*~
+
+# IDE files
+.vscode/
+.idea/
+*.iml
+
+# Build artifacts
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.so
+*.egg
+*.egg-info/
+dist/
+build/
+
+# Git files (if building from repo root)
+.git
+.gitignore
+.gitattributes
+
