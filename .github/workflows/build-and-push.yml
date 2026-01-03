@@ -26,6 +26,10 @@ on:
         description: 'Also tag as latest'
         type: boolean
         default: true
+      no_cache:
+        description: 'Disable Docker layer caching'
+        type: boolean
+        default: false
 
 env:
   # Default registry (GitHub Container Registry)
@@ -111,8 +115,9 @@ jobs:
             GODOT_VERSION=${{ env.GODOT_VERSION }}
             GODOT_RELEASE_TYPE=${{ env.GODOT_RELEASE_TYPE }}
             GODOT_SHA256=${{ vars.GODOT_SHA256 }}
-          cache-from: type=gha
+          cache-from: ${{ github.event.inputs.no_cache == 'true' && '' || 'type=gha' }}
           cache-to: type=gha,mode=max
+          no-cache: ${{ github.event.inputs.no_cache == 'true' }}
 
       - name: Generate build summary
         run: |
