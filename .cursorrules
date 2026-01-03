@@ -51,6 +51,12 @@ Use conventional commit types: `fix`, `feat`, `docs`, `ci`, `build`, `chore`, `r
 - Update related checklists when adding new required steps
 - Keep CICD_SETUP.md and SECURITY.md in sync with actual workflows
 
+### Claude Code Configuration
+- MCP servers go in `~/.claude.json` (root config), NOT `~/.claude/settings.json`
+- `~/.claude/settings.json` is for permissions and settings only
+- `GITHUB_PERSONAL_ACCESS_TOKEN` in MCP config is actually a GitHub App installation token
+- This token is for MCP tools ONLY - never extract it for `gh` CLI or other uses
+
 ## Security Mindset
 
 ### Always Consider

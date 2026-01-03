@@ -148,7 +148,15 @@ Generates Claude Code MCP configuration:
 }
 ```
 
-**Note:** The GitHub MCP server uses `GITHUB_PERSONAL_ACCESS_TOKEN` for authentication, but it works with installation tokens despite the name.
+**⚠️ Important about `GITHUB_PERSONAL_ACCESS_TOKEN`:**
+
+Despite its name, this is NOT a personal access token. The GitHub MCP server uses this environment variable name, but we populate it with a **GitHub App installation token**:
+
+- Auto-generated on container startup from GitHub App credentials
+- Expires after ~1 hour (refreshed on container restart)
+- **FOR MCP TOOLS ONLY** - never extract this for `gh` CLI or other uses
+
+The `gh` CLI is not installed in the sandbox. All GitHub operations should use MCP tools, which read this token automatically from `~/.claude.json`.
 
 ### 3. Container Startup (`image/scripts/setup-github-app.sh`)
 

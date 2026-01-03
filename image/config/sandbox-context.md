@@ -975,9 +975,73 @@ GITHUB_VERIFY_REPO=owner/repo /opt/scripts/verify-mcp.sh
 ```
 
 The script checks:
-- ✓ MCP configuration exists in settings.json
+- ✓ MCP configuration exists in ~/.claude.json
 - ✓ GitHub token is present and valid
 - ✓ Token has correct permissions for target repository
+
+### Understanding Claude Configuration Files
+
+**Important:** Claude Code uses **two different configuration files** for different purposes:
+
+| File | Purpose | Contains |
+|------|---------|----------|
+| `~/.claude.json` | **MCP server configuration** | `mcpServers` object with server definitions |
+| `~/.claude/settings.json` | **Claude Code settings** | Permissions, auto-updater status, preferences |
+
+**Common mistake:** Looking for MCP servers in `settings.json` - they won't be there!
+
+```bash
+# ✅ Correct: MCP servers are in ~/.claude.json
+cat ~/.claude.json | jq .mcpServers
+
+# ❌ Wrong: settings.json is for permissions, not MCP
+cat ~/.claude/settings.json | jq .mcpServers  # Will return null
+```
+
+**Example ~/.claude.json structure:**
+```json
+{
+  "mcpServers": {
+    "github": {
+      "command": "npx",
+      "args": ["-y", "@github/github-mcp-server"],
+      "env": {
+        "GITHUB_PERSONAL_ACCESS_TOKEN": "ghs_xxx..."
+      }
+    }
+  }
+}
+```
+
+**⚠️ About `GITHUB_PERSONAL_ACCESS_TOKEN`:**
+
+Despite its name, this is NOT a personal access token. It's a **GitHub App installation token** that:
+- Is auto-generated on container startup from GitHub App credentials
+- Expires after ~1 hour (auto-refreshed if container restarts)
+- Should **ONLY** be used for MCP tools, NOT for `gh` CLI
+
+```bash
+# ✅ Correct: MCP tools use this token automatically
+# Just use the MCP tools - they read from ~/.claude.json
+
+# ❌ WRONG: Never extract this token for gh CLI
+gh auth login --with-token < ~/.claude.json  # DON'T DO THIS!
+export GH_TOKEN=$(cat ~/.claude.json | jq -r ...)  # DON'T DO THIS!
+```
+
+The `gh` CLI is not available in the sandbox. Use MCP tools for all GitHub operations.
+
+**Example ~/.claude/settings.json structure:**
+```json
+{
+  "permissions": {
+    "bypassPermissionsMode": true,
+    "allow": ["*"],
+    "deny": []
+  },
+  "autoUpdaterStatus": "disabled"
+}
+```
 
 ### MCP Tools Not Available
 
@@ -985,13 +1049,13 @@ If MCP tools aren't working:
 
 1. **Check if MCP server is configured:**
    ```bash
-   cat ~/.claude/settings.json | jq .mcpServers
+   cat ~/.claude.json | jq .mcpServers
    ```
    Should show a `github` object with command and token.
 
 2. **Verify token is valid:**
    ```bash
-   TOKEN=$(cat ~/.claude/settings.json | jq -r '.mcpServers.github.env.GITHUB_PERSONAL_ACCESS_TOKEN')
+   TOKEN=$(cat ~/.claude.json | jq -r '.mcpServers.github.env.GITHUB_PERSONAL_ACCESS_TOKEN')
    curl -H "Authorization: Bearer $TOKEN" https://api.github.com/rate_limit
    ```
 
