@@ -1001,7 +1001,48 @@ make build  # ← Only needed if modifying the Dockerfile
 
 The CI/CD pipeline builds multi-arch images (amd64 + arm64) automatically on push to main.
 
-### Critical Issue #6: Godot Download URLs
+### Critical Issue #6: Claude Configuration Files (MCP vs Settings)
+
+**Problem**: MCP tools not detected, verification script reports "No MCP GitHub server configured"
+
+**Root Cause**: Claude Code uses **two different configuration files** that are commonly confused:
+
+| File | Purpose | Contains |
+|------|---------|----------|
+| `~/.claude.json` | **MCP server configuration** | `mcpServers` object with server definitions |
+| `~/.claude/settings.json` | **Claude Code settings** | Permissions, auto-updater status, preferences |
+
+**Solution**: Always configure MCP servers in `~/.claude.json`, NOT in `~/.claude/settings.json`:
+
+```bash
+# ✅ Correct: Check MCP servers in ~/.claude.json
+cat ~/.claude.json | jq .mcpServers
+
+# ❌ Wrong: settings.json doesn't have MCP servers
+cat ~/.claude/settings.json | jq .mcpServers  # Returns null
+```
+
+**About `GITHUB_PERSONAL_ACCESS_TOKEN` in MCP config:**
+
+Despite its name, this is NOT a personal access token. The GitHub MCP server uses this environment variable name, but we populate it with a **GitHub App installation token**:
+- Auto-generated on container startup from GitHub App credentials
+- Expires after ~1 hour (refreshed on container restart)
+- **FOR MCP TOOLS ONLY** - never extract this for `gh` CLI or other uses
+
+```bash
+# ❌ NEVER do this - token is for MCP only, not gh CLI
+export GH_TOKEN=$(cat ~/.claude.json | jq -r '.mcpServers.github.env.GITHUB_PERSONAL_ACCESS_TOKEN')
+gh issue list  # Don't hijack the MCP token!
+
+# ✅ Instead, just use MCP tools - they handle auth automatically
+# Use list_issues, create_pull_request, etc.
+```
+
+**Setup script already handles this**: The `setup-github-app.sh` script correctly writes MCP config to `~/.claude.json` and removes any incorrect MCP config from `settings.json`.
+
+**Verification**: Use `/opt/scripts/verify-mcp.sh` inside the container to confirm MCP is properly configured.
+
+### Critical Issue #7: Godot Download URLs
 
 **Problem**: Godot beta/rc/dev releases return 404 from `github.com/godotengine/godot`
 

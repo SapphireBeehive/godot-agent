@@ -2,9 +2,12 @@
 # verify-mcp.sh - Verify MCP GitHub integration is working
 #
 # This script verifies that:
-# 1. settings.json has MCP configuration
+# 1. ~/.claude.json has MCP configuration (mcpServers)
 # 2. GitHub token is present and valid
 # 3. Token has correct permissions for the target repo
+#
+# Note: MCP servers are configured in ~/.claude.json (root config),
+#       NOT in ~/.claude/settings.json (which is for permissions).
 #
 # Usage:
 #   /opt/scripts/verify-mcp.sh [--verbose]
@@ -55,34 +58,37 @@ log_debug() {
     fi
 }
 
-# Check 1: settings.json exists and has MCP config
+# Check 1: ~/.claude.json exists and has MCP config
 check_settings() {
-    local settings_file="${HOME}/.claude/settings.json"
+    # MCP servers are configured in ~/.claude.json (root config file),
+    # NOT in ~/.claude/settings.json (which is for permissions)
+    local claude_config="${HOME}/.claude.json"
     
-    if [[ ! -f "$settings_file" ]]; then
-        log_fail "Settings file not found: $settings_file"
+    if [[ ! -f "$claude_config" ]]; then
+        log_fail "Claude config not found: $claude_config"
+        log_debug "MCP servers must be configured in ~/.claude.json"
         return 1
     fi
     
     # Verify it's valid JSON
-    if ! jq empty "$settings_file" 2>/dev/null; then
-        log_fail "Settings file is not valid JSON"
+    if ! jq empty "$claude_config" 2>/dev/null; then
+        log_fail "Claude config is not valid JSON"
         return 1
     fi
     
     # Check for mcpServers.github
     local has_github
-    has_github=$(jq -r '.mcpServers.github // empty' "$settings_file")
+    has_github=$(jq -r '.mcpServers.github // empty' "$claude_config")
     
     if [[ -z "$has_github" ]]; then
-        log_fail "No MCP GitHub server configured in settings.json"
+        log_fail "No MCP GitHub server configured in ~/.claude.json"
         log_debug "Expected: .mcpServers.github object"
         return 1
     fi
     
     # Check for token in MCP config
     local token
-    token=$(jq -r '.mcpServers.github.env.GITHUB_PERSONAL_ACCESS_TOKEN // empty' "$settings_file")
+    token=$(jq -r '.mcpServers.github.env.GITHUB_PERSONAL_ACCESS_TOKEN // empty' "$claude_config")
     
     if [[ -z "$token" ]]; then
         log_fail "No GitHub token in MCP configuration"
