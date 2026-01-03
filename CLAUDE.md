@@ -232,12 +232,21 @@ make build-no-cache GODOT_VERSION=4.6 GODOT_RELEASE_TYPE=beta2
 
 ```bash
 # 1. Get the checksum for your specific version
-VERSION="4.6-beta2"
+# For stable releases:
+VERSION="4.5.1-stable"
 curl -sL "https://github.com/godotengine/godot/releases/download/${VERSION}/Godot_v${VERSION}_linux.x86_64.zip" | sha256sum
+
+# For beta/rc/dev releases (use godot-builds repo):
+VERSION="4.6-beta2"
+curl -sL "https://github.com/godotengine/godot-builds/releases/download/${VERSION}/Godot_v${VERSION}_linux.x86_64.zip" | sha256sum
 
 # 2. Build with verification
 GODOT_SHA256=<hash> make build GODOT_VERSION=4.6 GODOT_RELEASE_TYPE=beta2
 ```
+
+**Architecture**: The fetch script auto-detects architecture:
+- Apple Silicon (M1/M2/M3): Downloads `linux.arm64` binary
+- Intel/AMD: Downloads `linux.x86_64` binary
 
 **Note:** `GODOT_SHA256` is version-specific. Each version/release combination has a different hash. If not set, verification is skipped (fine for development).
 
@@ -468,9 +477,9 @@ docker compose -f compose/compose.base.yml logs dnsfilter
 **Problem**: Running `make build` fails with GODOT_SHA256 errors
 
 **Why This Happens**: The build process needs:
-- Exact SHA256 checksum of the Godot binary
+- Exact SHA256 checksum of the Godot binary (optional but recommended)
 - The checksum isn't in the repo (intentionally - it changes per Godot version)
-- Godot doesn't provide official ARM64 Linux server builds (requires x86_64)
+- Building locally takes time and requires network access
 
 **Better Solution**: Pull from GitHub Container Registry instead of building:
 
@@ -484,6 +493,30 @@ make build  # ← Only needed if modifying the Dockerfile
 ```
 
 The CI/CD pipeline builds multi-arch images (amd64 + arm64) automatically on push to main.
+
+### Critical Issue #4: Godot Download URLs
+
+**Problem**: Godot beta/rc/dev releases return 404 from `github.com/godotengine/godot`
+
+**Root Cause**: Godot uses **two separate GitHub repos** for releases:
+- `godotengine/godot` - **stable releases only**
+- `godotengine/godot-builds` - **all releases** (stable, beta, rc, dev)
+
+**Correct URLs**:
+```bash
+# Stable releases (both work):
+https://github.com/godotengine/godot/releases/download/4.5.1-stable/Godot_v4.5.1-stable_linux.x86_64.zip
+https://github.com/godotengine/godot-builds/releases/download/4.5.1-stable/Godot_v4.5.1-stable_linux.x86_64.zip
+
+# Pre-releases (ONLY godot-builds):
+https://github.com/godotengine/godot-builds/releases/download/4.6-beta2/Godot_v4.6-beta2_linux.x86_64.zip
+```
+
+**TuxFamily** (`downloads.tuxfamily.org`) is an alternative mirror but often slower/less reliable.
+
+The `fetch_godot.sh` script now auto-detects architecture and tries GitHub first:
+- `linux.x86_64` for Intel/AMD
+- `linux.arm64` for Apple Silicon (M1/M2/M3)
 
 ### Restart Services After Config Changes
 

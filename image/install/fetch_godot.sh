@@ -1,43 +1,53 @@
 #!/bin/bash
-# fetch_godot.sh - Downloads and verifies Godot 4.6 headless binary for Linux arm64
+# fetch_godot.sh - Downloads and verifies Godot headless binary for Linux
 #
-# TODO: Update these values when Godot 4.6 is officially released
-# As of writing, Godot 4.6 may not have official releases yet.
-# Check https://godotengine.org/download/server/ for official builds.
+# Supports both x86_64 and arm64 architectures (auto-detected).
 #
-# For headless/server builds, Godot provides Linux Server builds.
-# The arm64 builds may be available at:
-# https://downloads.tuxfamily.org/godotengine/4.x.x/
-# or via GitHub releases.
+# Download sources:
+#   - godotengine/godot-builds (GitHub) - All releases (stable, beta, rc, dev)
+#   - godotengine/godot (GitHub) - Stable releases only
+#   - downloads.tuxfamily.org - Alternative mirror
+#
+# See: https://godotengine.org/download/archive/
 
 set -euo pipefail
 
-GODOT_VERSION="${GODOT_VERSION:-4.3}"
-GODOT_RELEASE_TYPE="${GODOT_RELEASE_TYPE:-stable}"
+GODOT_VERSION="${GODOT_VERSION:-4.6}"
+GODOT_RELEASE_TYPE="${GODOT_RELEASE_TYPE:-beta2}"
 
-# TODO: These URLs are placeholders - verify against official Godot downloads
-# Godot 4.x server/headless builds for Linux arm64
-# Official naming convention: Godot_v{VERSION}-{TYPE}_linux.arm64.zip (for templates)
-# or: Godot_v{VERSION}-{TYPE}_linux_server.arm64.zip (for server builds)
+# Detect architecture
+ARCH=$(uname -m)
+case "$ARCH" in
+    x86_64|amd64)
+        GODOT_ARCH="x86_64"
+        ;;
+    aarch64|arm64)
+        GODOT_ARCH="arm64"
+        ;;
+    *)
+        echo "ERROR: Unsupported architecture: $ARCH"
+        exit 1
+        ;;
+esac
 
-# Placeholder URL structure based on Godot's release patterns
-BASE_URL="https://github.com/godotengine/godot/releases/download/${GODOT_VERSION}-${GODOT_RELEASE_TYPE}"
+# Godot binary naming convention: Godot_v{VERSION}-{TYPE}_linux.{ARCH}
+GODOT_BINARY_NAME="Godot_v${GODOT_VERSION}-${GODOT_RELEASE_TYPE}_linux.${GODOT_ARCH}"
 
-# For server builds (headless), the naming is typically:
-# Godot_v4.3-stable_linux.arm64.zip (export templates)
-# For the editor/server binary, you may need to build from source for arm64
-# or use the linux.x86_64 build under emulation
+# Build download URLs
+# GitHub repos:
+#   godotengine/godot       - stable releases only
+#   godotengine/godot-builds - ALL releases (stable, beta, rc, dev)
+# TuxFamily mirror - alternative source
 
-# TODO: CRITICAL - Godot does not officially provide arm64 Linux server binaries
-# Options:
-# 1. Use x86_64 binary with QEMU emulation (slow but works)
-# 2. Build from source for arm64 (complex but native speed)
-# 3. Wait for official arm64 builds
-#
-# For now, we'll set up for the x86_64 binary path as a fallback
-
-GODOT_BINARY_NAME="Godot_v${GODOT_VERSION}-${GODOT_RELEASE_TYPE}_linux.x86_64"
-DOWNLOAD_URL="${BASE_URL}/${GODOT_BINARY_NAME}.zip"
+if [[ "$GODOT_RELEASE_TYPE" == "stable" ]]; then
+    # Stable releases are on both repos
+    GITHUB_URL="https://github.com/godotengine/godot/releases/download/${GODOT_VERSION}-${GODOT_RELEASE_TYPE}/${GODOT_BINARY_NAME}.zip"
+    TUXFAMILY_URL="https://downloads.tuxfamily.org/godotengine/${GODOT_VERSION}/${GODOT_BINARY_NAME}.zip"
+else
+    # Pre-releases (beta, rc, dev) are ONLY on godot-builds repo
+    GITHUB_URL="https://github.com/godotengine/godot-builds/releases/download/${GODOT_VERSION}-${GODOT_RELEASE_TYPE}/${GODOT_BINARY_NAME}.zip"
+    TUXFAMILY_URL="https://downloads.tuxfamily.org/godotengine/${GODOT_VERSION}/${GODOT_RELEASE_TYPE}/${GODOT_BINARY_NAME}.zip"
+fi
 
 # Expected SHA256 checksum - TODO: Update this with the actual checksum
 # You can get this from the official Godot downloads page or compute it yourself
@@ -54,6 +64,7 @@ trap cleanup EXIT
 
 echo "=== Godot Headless/Server Binary Fetcher ==="
 echo "Version: ${GODOT_VERSION}-${GODOT_RELEASE_TYPE}"
+echo "Architecture: ${GODOT_ARCH} (detected: ${ARCH})"
 echo "Install directory: ${INSTALL_DIR}"
 echo ""
 
@@ -76,16 +87,35 @@ if [[ "$EXPECTED_SHA256" == "TODO_UPDATE_CHECKSUM_FROM_OFFICIAL_SOURCE" ]] || [[
     SKIP_CHECKSUM=true
 fi
 
-echo "Downloading Godot from: ${DOWNLOAD_URL}"
 cd "$TEMP_DIR"
 
-# Download the binary
-if command -v curl &> /dev/null; then
-    curl -fSL -o godot.zip "$DOWNLOAD_URL"
-elif command -v wget &> /dev/null; then
-    wget -O godot.zip "$DOWNLOAD_URL"
-else
-    echo "ERROR: Neither curl nor wget available"
+# Download the binary - try TuxFamily first, then GitHub
+download_success=false
+
+for url in "$GITHUB_URL" "$TUXFAMILY_URL"; do
+    echo "Downloading Godot from: ${url}"
+    if command -v curl &> /dev/null; then
+        if curl -fSL -o godot.zip "$url" 2>/dev/null; then
+            download_success=true
+            break
+        fi
+    elif command -v wget &> /dev/null; then
+        if wget -O godot.zip "$url" 2>/dev/null; then
+            download_success=true
+            break
+        fi
+    else
+        echo "ERROR: Neither curl nor wget available"
+        exit 1
+    fi
+    echo "Failed to download from ${url}, trying next mirror..."
+done
+
+if [[ "$download_success" != "true" ]]; then
+    echo "ERROR: Failed to download Godot from all mirrors"
+    echo "Tried:"
+    echo "  - ${GITHUB_URL}"
+    echo "  - ${TUXFAMILY_URL}"
     exit 1
 fi
 

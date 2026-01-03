@@ -23,7 +23,7 @@ on:
           - '4.4'
           - '4.3'
       godot_release_type:
-        description: 'Release type (stable, beta1, rc1, etc.)'
+        description: 'Release type (stable, beta1, beta2, rc1, etc.)'
         required: false
         default: 'beta2'
         type: string
