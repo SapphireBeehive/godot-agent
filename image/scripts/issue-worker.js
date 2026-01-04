@@ -196,8 +196,8 @@ async function ensureRepoCloned() {
     });
     
     // Configure git
-    execSync('git config user.name "Claude Agent"', { cwd: PROJECT_DIR });
-    execSync('git config user.email "claude-agent@users.noreply.github.com"', { cwd: PROJECT_DIR });
+    execSync('git config user.name "Godot Agent"', { cwd: PROJECT_DIR });
+    execSync('git config user.email "2587725+godot-agent[bot]@users.noreply.github.com"', { cwd: PROJECT_DIR });
     
     log('Repository cloned successfully');
 }
