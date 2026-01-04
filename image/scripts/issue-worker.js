@@ -445,7 +445,7 @@ async function createPullRequest(issue, branchName, claudeOutput) {
 ${claudeOutput.substring(0, 3000)}
 
 ---
-🤖 *This PR was automatically created by Claude Agent \`${WORKER_ID}\`*`;
+🤖 *This PR was automatically created by Godot Agent \`${WORKER_ID}\`*`;
 
     const prResponse = await github('POST',
         `/repos/${owner}/${repo}/pulls`,
