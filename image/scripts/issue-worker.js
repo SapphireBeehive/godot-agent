@@ -243,13 +243,29 @@ async function findAvailableIssue() {
  * Claim an issue using atomic comment verification
  * 
  * This prevents race conditions where multiple workers claim the same issue.
- * The first comment with CLAIM: prefix wins, determined by GitHub's server timestamps.
+ * Uses a two-phase approach:
+ * 1. Check if already claimed (in-progress label exists)
+ * 2. Post claim comment, wait, verify we were first
+ * 3. Add in-progress label BEFORE updating comment (so other workers see it)
  */
 async function claimIssue(issue) {
     const [owner, repo] = GITHUB_REPO.split('/');
     const claimId = `CLAIM:${WORKER_ID}:${Date.now()}`;
     
     log(`Attempting to claim issue #${issue.number}...`);
+    
+    // Step 0: Double-check issue doesn't already have in-progress label
+    // (might have been claimed between findAvailableIssue and now)
+    const issueResponse = await github('GET',
+        `/repos/${owner}/${repo}/issues/${issue.number}`
+    );
+    if (issueResponse.status === 200) {
+        const hasInProgress = issueResponse.data.labels?.some(l => l.name === 'in-progress');
+        if (hasInProgress) {
+            log(`Issue #${issue.number} already has in-progress label, skipping...`);
+            return false;
+        }
+    }
     
     // Step 1: Post claim comment atomically
     const claimResponse = await github('POST',
@@ -268,7 +284,23 @@ async function claimIssue(issue) {
     // Step 2: Wait for other workers to potentially post their claims
     await sleep(CLAIM_VERIFICATION_DELAY);
     
-    // Step 3: Fetch all comments and find CLAIM comments
+    // Step 3: Re-check for in-progress label (another worker might have won and added it)
+    const recheckResponse = await github('GET',
+        `/repos/${owner}/${repo}/issues/${issue.number}`
+    );
+    if (recheckResponse.status === 200) {
+        const hasInProgress = recheckResponse.data.labels?.some(l => l.name === 'in-progress');
+        if (hasInProgress) {
+            log(`Issue #${issue.number} was claimed by another worker (in-progress label found)`);
+            // Clean up our claim comment
+            await github('DELETE',
+                `/repos/${owner}/${repo}/issues/comments/${ourCommentId}`
+            );
+            return false;
+        }
+    }
+    
+    // Step 4: Fetch all comments and find CLAIM comments
     const commentsResponse = await github('GET',
         `/repos/${owner}/${repo}/issues/${issue.number}/comments?per_page=100`
     );
@@ -283,7 +315,7 @@ async function claimIssue(issue) {
         .filter(c => c.body && c.body.startsWith('CLAIM:'))
         .sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
     
-    // Step 4: Check if our claim was first
+    // Step 5: Check if our claim was first
     if (claims.length === 0 || claims[0].id !== ourCommentId) {
         // We lost the race - another worker claimed first
         const winner = claims.length > 0 ? claims[0].body.split(':')[1] : 'unknown';
@@ -297,7 +329,8 @@ async function claimIssue(issue) {
         return false;
     }
     
-    // We won! Add in-progress label
+    // Step 6: We won! Add in-progress label FIRST (before updating comment)
+    // This is critical - other workers check for this label
     log(`Won claim for issue #${issue.number}!`);
     
     const labelResponse = await github('POST',
@@ -310,7 +343,8 @@ async function claimIssue(issue) {
         // Continue anyway since we have the claim
     }
     
-    // Update our claim comment to a nicer message
+    // Step 7: NOW update our claim comment to a nicer message
+    // (only after in-progress label is set)
     await github('PATCH',
         `/repos/${owner}/${repo}/issues/comments/${ourCommentId}`,
         { body: `🤖 Agent \`${WORKER_ID}\` claimed and is now working on this issue.` }
