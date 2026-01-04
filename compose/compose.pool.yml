@@ -60,9 +60,9 @@ services:
     dns:
       - 10.100.1.2  # dnsfilter
     
-    # Each worker gets its own anonymous volume
+    # Each worker gets its own anonymous volume (not named - anonymous volumes are per-container)
     volumes:
-      - worker_data:/project:rw
+      - /project
       - ../secrets:/secrets:ro
       - ../image/scripts/issue-worker.js:/opt/scripts/issue-worker.js:ro
     
@@ -95,10 +95,6 @@ services:
         condition: service_started
     
     working_dir: /project
-
-volumes:
-  worker_data:
-    # Each scaled instance gets its own volume
 
 networks:
   sandbox_net:
