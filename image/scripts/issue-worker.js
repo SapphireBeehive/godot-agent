@@ -375,6 +375,39 @@ async function createWorkingBranch(issue) {
 }
 
 /**
+ * Refresh MCP token in ~/.claude.json
+ * This ensures Claude's MCP tools have a fresh token for GitHub API calls
+ */
+async function refreshMcpToken() {
+    try {
+        const token = await getInstallationToken();
+        const claudeConfigPath = path.join(process.env.HOME || '/home/claude', '.claude.json');
+        
+        let config = {};
+        if (fs.existsSync(claudeConfigPath)) {
+            config = JSON.parse(fs.readFileSync(claudeConfigPath, 'utf-8'));
+        }
+        
+        // Update the MCP GitHub server token
+        if (!config.mcpServers) config.mcpServers = {};
+        if (!config.mcpServers.github) {
+            config.mcpServers.github = {
+                command: 'npx',
+                args: ['-y', '@github/github-mcp-server']
+            };
+        }
+        if (!config.mcpServers.github.env) config.mcpServers.github.env = {};
+        config.mcpServers.github.env.GITHUB_PERSONAL_ACCESS_TOKEN = token;
+        
+        fs.writeFileSync(claudeConfigPath, JSON.stringify(config, null, 2));
+        log('Refreshed MCP token in ~/.claude.json');
+    } catch (err) {
+        log(`Warning: Failed to refresh MCP token: ${err.message}`);
+        // Continue anyway - MCP tools may still work with existing token
+    }
+}
+
+/**
  * Run Claude on the issue
  */
 async function runClaude(issue) {
@@ -392,6 +425,9 @@ Instructions:
 When you're done, summarize what you changed.`;
 
     log(`Running Claude on issue #${issue.number}...`);
+    
+    // Refresh MCP token before running Claude (in case it expired)
+    await refreshMcpToken();
     
     return new Promise((resolve) => {
         const claude = spawn('claude', [
