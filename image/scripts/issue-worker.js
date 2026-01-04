@@ -394,7 +394,12 @@ When you're done, summarize what you changed.`;
     log(`Running Claude on issue #${issue.number}...`);
     
     return new Promise((resolve) => {
-        const claude = spawn('claude', ['--print', '--dangerously-skip-permissions', prompt], {
+        const claude = spawn('claude', [
+            '--print',
+            '--dangerously-skip-permissions',
+            '--no-session-persistence',  // Fresh context for each issue
+            prompt
+        ], {
             cwd: PROJECT_DIR,
             stdio: ['ignore', 'pipe', 'pipe'],
             env: { ...process.env, TERM: 'dumb' }
