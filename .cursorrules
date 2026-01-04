@@ -1,5 +1,7 @@
 # Cursor Rules for godot-agent
 
+See `CLAUDE.md` for comprehensive project documentation including skills, troubleshooting, and lessons learned.
+
 ## Response Style
 
 ### After Making Changes
@@ -11,74 +13,38 @@ type(scope): short description
 Optional longer explanation of what changed and why.
 ```
 
-Use conventional commit types: `fix`, `feat`, `docs`, `ci`, `build`, `chore`, `refactor`
+Types: `fix`, `feat`, `docs`, `ci`, `build`, `chore`, `refactor`
 
 ### Code Blocks
 - Use fenced code blocks with language identifiers
 - For shell commands users should copy, use ```bash blocks
 
-## Project Patterns
+## Quick Pattern Reference
 
 ### Docker Compose
-- Use modern syntax: `deploy.resources.limits.pids` instead of legacy `pids_limit`
-- Default environment variables to empty to suppress CI warnings: `${VAR_NAME:-}`
-- The `ANTHROPIC_API_KEY` should never be required in CI - always default to empty
-
-### GitHub Actions
-- Secrets cannot be used directly in `if:` conditions
-- To conditionally run steps based on secrets, set them as job-level `env:` first
-- Use `vars.` for non-sensitive values (like checksums), `secrets.` for credentials
-- Add `load: true` to `docker/build-push-action` when you need the image locally for tests
-- Pin actions to versions (or SHAs for production hardening)
-
-### Dockerfile
-- Use `# hadolint ignore=DL3008` for apt packages (version pinning is impractical)
-- Debian package versions are tied to base image; don't pin exact versions
-
-### Shell Scripts
-- Use `# shellcheck disable=SC2034` for intentionally unused variables (like color constants)
-- Color variables are often defined as a complete set for consistency
+- Modern syntax: `deploy.resources.limits.pids` (not legacy `pids_limit`)
+- Default env vars to empty: `${VAR:-}` (suppresses CI warnings)
 
 ### Python
-- **Always use `uv` instead of `pip`** for Python package management
-- Use `uv pip install` instead of `pip install`
-- Use `uv venv` instead of `python -m venv`
-- Use `uv run` to run Python scripts with dependencies
-- Never use bare `pip` commands
-
-### Documentation
-- When adding new steps to numbered guides, update all subsequent step numbers
-- Update related checklists when adding new required steps
-- Keep CICD_SETUP.md and SECURITY.md in sync with actual workflows
+- **Always use `uv`** - never bare `pip` commands
+- `uv pip install`, `uv venv`, `uv run`
 
 ### Claude Code Configuration
-- MCP servers go in `~/.claude.json` (root config), NOT `~/.claude/settings.json`
-- `~/.claude/settings.json` is for permissions and settings only
-- `GITHUB_PERSONAL_ACCESS_TOKEN` in MCP config is actually a GitHub App installation token
-- This token is for MCP tools ONLY - never extract it for `gh` CLI or other uses
+- MCP servers → `~/.claude.json`
+- Settings/permissions → `~/.claude/settings.json`
+- `GITHUB_PERSONAL_ACCESS_TOKEN` in MCP config = GitHub App installation token (MCP tools only)
 
-## Security Mindset
+### Security
+- Never expose secrets in shell history
+- Minimal permissions by default
+- See `CLAUDE.md` > Lessons Learned for common pitfalls
 
-### Always Consider
-- Never expose secrets in shell history (no `echo "token" | command`)
-- Prefer interactive prompts or file-based auth for credentials
-- Default to minimal permissions (read-only unless write is needed)
-- Secrets scanning should be enabled in repositories
+## Key References in CLAUDE.md
 
-### CI/CD Security
-- Workflows should declare minimal `permissions:` per job
-- Production deployments should use GitHub Environments with approval gates
-- Consider pinning actions to commit SHAs for supply chain security
-
-## Local Development
-
-### Testing CI Locally
-- Use `act` for local GitHub Actions testing
-- Apple Silicon needs `--container-architecture linux/amd64`
-- `make ci` runs the full CI workflow locally
-
-### Make Targets
-- Follow existing naming conventions (kebab-case for multi-word targets)
-- Add helper targets with `_` prefix for internal checks (e.g., `_check-act`)
-- Update `.PHONY` when adding new targets
-
+| Topic | Section |
+|-------|---------|
+| First-time setup | Skills > First-Time Setup |
+| GitHub auth (host vs sandbox) | Skills > GitHub Authentication |
+| When things break | Skills > Emergency Recovery |
+| Common errors | Common Issues table |
+| Past critical bugs | Lessons Learned #1-7 |

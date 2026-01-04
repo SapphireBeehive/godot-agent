@@ -18,7 +18,7 @@ This protects against Claude accidentally (or maliciously) accessing sensitive d
 This file (`CLAUDE.md`) documents **host-side operations** - commands run on the developer's machine to manage the sandbox infrastructure.
 
 **If you are Claude running INSIDE the sandbox container**, your context file is:
-```
+```text
 /project/.claude/sandbox-context.md
 ```
 Or see `image/config/sandbox-context.md` in this repo for the full reference.
@@ -65,6 +65,8 @@ git push            # ⚠️ Use MCP push_files if git push fails
   - [One-shot Mode](#skill-running-claude-in-the-sandbox-one-shot-mode)
   - [Daily Workflows](#skill-daily-workflow-persistent-mode)
   - [Queue Mode](#skill-queue-mode-async-task-processing)
+  - [Emergency Recovery](#skill-emergency-recovery)
+  - [Updating to Latest Image](#skill-updating-to-latest-image)
   - [Debugging Infrastructure](#skill-debugging-infrastructure-issues)
   - [Before Committing](#skill-before-committing-changes)
   - [Security Scanning](#skill-scanning-for-security-issues)
@@ -82,6 +84,13 @@ git push            # ⚠️ Use MCP push_files if git push fails
 - [Conventions](#conventions)
 - [Common Issues](#common-issues)
 - [Lessons Learned](#lessons-learned-for-future-claude-instances)
+  - [#1: Nginx Stream Proxy](#critical-issue-1-nginx-stream-proxy-configuration)
+  - [#2: CoreDNS Configuration](#critical-issue-2-coredns-configuration)
+  - [#3: Agent Container is Minimal](#critical-issue-3-agent-container-is-minimal)
+  - [#4: CI Test Project Permissions](#critical-issue-4-ci-test-project-permissions)
+  - [#5: Prefer Pre-built Image](#critical-issue-5-prefer-pre-built-image-over-local-builds)
+  - [#6: Claude Config Files (MCP vs Settings)](#critical-issue-6-claude-configuration-files-mcp-vs-settings)
+  - [#7: Godot Download URLs](#critical-issue-7-godot-download-urls)
 
 ---
 
@@ -136,8 +145,13 @@ make auth
 # 4. Install git hooks for secret scanning
 make install-hooks
 
-# 5. Build the agent image
-make build
+# 5. Get the agent image (pull pre-built - faster than building locally)
+docker pull ghcr.io/sapphirebeehivestudios/claude-godot-agent:latest
+docker tag ghcr.io/sapphirebeehivestudios/claude-godot-agent:latest claude-godot-agent:latest
+docker tag ghcr.io/sapphirebeehivestudios/claude-godot-agent:latest claude-godot-agent:4.6
+
+# 5a. (Optional) Build locally only if modifying the Dockerfile
+# make build
 
 # 6. Start infrastructure services
 make up
@@ -359,6 +373,61 @@ Queue directory structure:
 ├── completed/       # Successfully completed
 ├── failed/          # Failed tasks
 └── results/         # Execution logs
+```
+
+**Task file format:** Plain text with the prompt for Claude:
+```text
+# Example: 001-movement.md
+Add player movement with WASD controls.
+
+Requirements:
+- Use CharacterBody3D
+- 10 units/second walk speed  
+- Sprint with Shift key (2x speed)
+```
+The filename becomes the task identifier in results.
+
+### Skill: Emergency Recovery
+
+When everything is broken and normal commands fail:
+
+```bash
+# Nuclear option - remove ALL containers and volumes
+make clean-all
+
+# Or manually if make doesn't work:
+docker compose -f compose/compose.base.yml down --volumes --remove-orphans
+docker compose -f compose/compose.persistent.yml down --volumes --remove-orphans 2>/dev/null || true
+
+# Verify clean state
+docker ps -a | grep -E "(sandbox|proxy|dns|agent)"  # Should be empty
+docker network ls | grep sandbox  # Should be empty
+
+# Fresh start
+docker pull ghcr.io/sapphirebeehivestudios/claude-godot-agent:latest
+docker tag ghcr.io/sapphirebeehivestudios/claude-godot-agent:latest claude-godot-agent:latest
+make up
+```
+
+### Skill: Updating to Latest Image
+
+When a new version of the agent image is released:
+
+```bash
+# Pull latest from registry
+docker pull ghcr.io/sapphirebeehivestudios/claude-godot-agent:latest
+
+# Re-tag for local use
+docker tag ghcr.io/sapphirebeehivestudios/claude-godot-agent:latest claude-godot-agent:latest
+docker tag ghcr.io/sapphirebeehivestudios/claude-godot-agent:latest claude-godot-agent:4.6
+
+# If using persistent agent, restart it
+make down-agent
+make up-agent PROJECT=/path/to/project
+
+# Verify new version
+docker exec agent godot --version
+docker exec agent claude --version
 ```
 
 ### Skill: Debugging Infrastructure Issues
@@ -860,6 +929,8 @@ This configures git to use `.githooks/pre-commit` which:
 | Compose validation errors | `make validate` to see details |
 | Proxy containers restarting | Check nginx configs, see Lessons Learned below |
 | Agent missing nslookup/curl | Use Node.js for network tests (see Lessons Learned #3) |
+| Container exits immediately | Check logs: `docker logs agent`. Usually missing PROJECT or auth |
+| "No such file" in container | PROJECT path must be absolute, not relative (`~/` is fine) |
 
 ---
 
@@ -1103,7 +1174,7 @@ All these should be true:
 # 1. Image exists locally
 docker images | grep claude-godot-agent
 # Should show: claude-godot-agent  latest  ...
-#              claude-godot-agent  4.3     ...
+#              claude-godot-agent  4.6     ...
 
 # 2. All 6 services running
 make status
