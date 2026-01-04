@@ -51,23 +51,38 @@ You are running inside a **sandboxed Docker container** with restricted network 
 
 ## Table of Contents
 
-1. [Quick Reference](#quick-reference)
-2. [Environment Overview](#environment-overview)
-3. [Your Mission: Autonomous Development](#your-mission-autonomous-development)
-4. [Prompt Mode Workflow](#prompt-mode-workflow)
-5. [Queue Mode Workflow](#queue-mode-workflow)
-6. [Issue Mode Workflow](#issue-mode-workflow)
-7. [Testing Requirements](#testing-requirements)
-8. [GitHub Access via MCP Tools](#github-access-via-mcp-tools)
-9. [Network Access](#network-access)
-10. [Git Workflow](#git-workflow-when-using-git-cli)
-11. [Filesystem](#filesystem)
-12. [Security Boundaries](#security-boundaries)
-13. [Best Practices](#best-practices)
-14. [Troubleshooting](#troubleshooting)
-15. [Lessons Learned](#lessons-learned)
-16. [Getting Help](#getting-help)
-17. [Appendix A: Godot Engine Reference](#appendix-a-godot-engine-reference)
+1. [Skills](#skills)
+2. [Quick Reference](#quick-reference)
+3. [Environment Overview](#environment-overview)
+4. [Your Mission: Autonomous Development](#your-mission-autonomous-development)
+5. [Prompt Mode Workflow](#prompt-mode-workflow)
+6. [Queue Mode Workflow](#queue-mode-workflow)
+7. [Issue Mode Workflow](#issue-mode-workflow)
+8. [Testing Requirements](#testing-requirements)
+9. [GitHub Access via MCP Tools](#github-access-via-mcp-tools)
+10. [Network Access](#network-access)
+11. [Git Workflow](#git-workflow-when-using-git-cli)
+12. [Filesystem](#filesystem)
+13. [Security Boundaries](#security-boundaries)
+14. [Best Practices](#best-practices)
+15. [Troubleshooting](#troubleshooting)
+16. [Lessons Learned](#lessons-learned)
+17. [Getting Help](#getting-help)
+18. [Appendix A: Godot Engine Reference](#appendix-a-godot-engine-reference)
+
+---
+
+## Skills
+
+Skills are documented procedures for common tasks. Reference these when performing specific operations.
+
+| Skill | Purpose | See Section |
+|-------|---------|-------------|
+| **Atomic Issue Claiming** | Safely claim an issue when multiple agents running | [Step 2: Claim the Issue](#step-2-claim-the-issue-atomic-claim-verification) |
+| **Test Writing** | Create comprehensive tests for changes | [Testing Requirements](#testing-requirements) |
+| **PR Creation** | Push changes and create pull requests | [Step 6: Push and Create PR](#step-6-push-and-create-pr) |
+| **Review Feedback** | Address comments on your PRs | [Step 9: Addressing Review Feedback](#step-9-addressing-review-feedback) |
+| **MCP Troubleshooting** | Debug GitHub API issues | [Troubleshooting](#troubleshooting) |
 
 ---
 
@@ -90,7 +105,9 @@ You are running inside a **sandboxed Docker container** with restricted network 
 | List issues | `list_issues` |
 | Search issues | `search_issues` |
 | Get issue details | `get_issue` |
-| Claim issue | `create_issue_comment` |
+| Claim issue (atomic) | `create_issue_comment` → wait → verify first |
+| Update comment | `update_issue_comment` |
+| List comments | `list_issue_comments` |
 | Create issue | `create_issue` |
 | Create PR | `create_pull_request` |
 | List PRs | `list_pull_requests` |
@@ -545,19 +562,73 @@ Use list_issues:
 
 **If no critical/high priority issues exist**, work on medium priority. If none exist, work on low priority or unlabeled issues.
 
-### Step 2: Claim the Issue
+### Step 2: Claim the Issue (Atomic Claim Verification)
 
-**Before starting work, comment on the issue to claim it:**
+**Multiple agents may be running simultaneously.** To prevent duplicate work, use atomic claim verification:
 
 ```
+┌──────────────────────────────────────────────────────────────┐
+│  ATOMIC CLAIM PROCESS                                        │
+│                                                              │
+│  1. POST claim comment with unique identifier                │
+│     → "CLAIM:{your-id}:{timestamp}"                         │
+│                                                              │
+│  2. WAIT 3 seconds for other potential claims               │
+│                                                              │
+│  3. CHECK all comments on the issue                          │
+│     → Filter for CLAIM: comments                            │
+│     → Sort by created_at timestamp (server time)            │
+│                                                              │
+│  4. VERIFY you were first                                    │
+│     → If your claim is first: proceed with work             │
+│     → If another claim is first: SKIP this issue            │
+│                                                              │
+│  5. UPDATE your comment if you won                           │
+│     → Change to friendly "I'm working on this" message      │
+└──────────────────────────────────────────────────────────────┘
+```
+
+**Step-by-step with MCP tools:**
+
+```
+# Step 1: Post atomic claim
 Use create_issue_comment:
   - owner: owner
   - repo: repo
   - issue_number: N
-  - body: "🤖 I'm claiming this issue and starting work on it now."
+  - body: "CLAIM:godot-agent-abc123:1704307200000"
+
+# Step 2: Wait 3 seconds (mentally, or use a subsequent check)
+
+# Step 3: Check all comments
+Use list_issue_comments (or get_issue with comments):
+  - owner: owner
+  - repo: repo
+  - issue_number: N
+
+# Step 4: Verify your claim was first
+Look at all comments starting with "CLAIM:"
+Sort by created_at timestamp
+If yours is NOT first → skip this issue, find another
+
+# Step 5: If you won, update your claim to a friendly message
+Use update_issue_comment:
+  - owner: owner
+  - repo: repo
+  - comment_id: <your claim comment id>
+  - body: "🤖 I claimed this issue and am now working on it."
 ```
 
-This prevents duplicate work if multiple agents are running.
+**Why this works:**
+- GitHub comment timestamps are server-side (atomic)
+- First comment wins, deterministically
+- Race conditions are eliminated
+- Claims are visible in issue history for debugging
+
+**If you lose the claim race:**
+- Do NOT start working on the issue
+- Find a different unclaimed issue
+- Optionally delete your claim comment to reduce clutter
 
 ### Step 3: Create a Feature Branch
 
@@ -1473,6 +1544,31 @@ This section documents critical issues encountered and their solutions. Learn fr
 **Solution:** Always run `git status` before pushing to verify all files are staged.
 
 **Verification:** `git status` shows no untracked files in test directories.
+
+### Issue: Multiple Agents Claiming Same Issue (Race Condition)
+
+**Problem:** When multiple agents poll for issues simultaneously, they can both find and claim the same unclaimed issue, leading to duplicate work and conflicting PRs.
+
+**Root Cause:** There's a time window between finding an issue and adding a claim comment. Multiple agents can read "unclaimed" before any has written their claim.
+
+**Solution:** Use atomic claim verification:
+1. Post a `CLAIM:{agent-id}:{timestamp}` comment immediately
+2. Wait 3 seconds for other claims to arrive
+3. Fetch all comments and sort by server timestamp
+4. Only the first CLAIM comment wins—all others must skip the issue
+
+**Verification:** When you post a claim, always verify you were first before proceeding:
+```
+1. Post claim comment → get comment ID
+2. Wait 3 seconds
+3. List all comments on the issue
+4. Filter for CLAIM: prefix
+5. Sort by created_at
+6. If yours is first → proceed
+7. If yours is NOT first → skip, find another issue
+```
+
+**See:** [Step 2: Claim the Issue](#step-2-claim-the-issue-atomic-claim-verification) for detailed workflow.
 
 ---
 
