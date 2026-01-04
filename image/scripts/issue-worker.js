@@ -46,12 +46,22 @@ let issuesProcessed = 0;
 let githubToken = null;
 let tokenExpiry = 0;
 
+// Claim verification delay (ms) - wait for other workers to potentially claim
+const CLAIM_VERIFICATION_DELAY = 3000;
+
 /**
  * Log with worker prefix
  */
 function log(message) {
     const timestamp = new Date().toISOString().replace('T', ' ').substring(0, 19);
     console.log(`[${timestamp}] [${WORKER_ID}] ${message}`);
+}
+
+/**
+ * Sleep for specified milliseconds
+ */
+function sleep(ms) {
+    return new Promise(resolve => setTimeout(resolve, ms));
 }
 
 /**
@@ -230,26 +240,80 @@ async function findAvailableIssue() {
 }
 
 /**
- * Claim an issue by adding in-progress label
+ * Claim an issue using atomic comment verification
+ * 
+ * This prevents race conditions where multiple workers claim the same issue.
+ * The first comment with CLAIM: prefix wins, determined by GitHub's server timestamps.
  */
 async function claimIssue(issue) {
     const [owner, repo] = GITHUB_REPO.split('/');
+    const claimId = `CLAIM:${WORKER_ID}:${Date.now()}`;
     
-    // Add in-progress label
+    log(`Attempting to claim issue #${issue.number}...`);
+    
+    // Step 1: Post claim comment atomically
+    const claimResponse = await github('POST',
+        `/repos/${owner}/${repo}/issues/${issue.number}/comments`,
+        { body: claimId }
+    );
+    
+    if (claimResponse.status !== 201) {
+        log(`Failed to post claim comment: ${JSON.stringify(claimResponse.data)}`);
+        return false;
+    }
+    
+    const ourCommentId = claimResponse.data.id;
+    log(`Posted claim comment (id: ${ourCommentId}), waiting for other claims...`);
+    
+    // Step 2: Wait for other workers to potentially post their claims
+    await sleep(CLAIM_VERIFICATION_DELAY);
+    
+    // Step 3: Fetch all comments and find CLAIM comments
+    const commentsResponse = await github('GET',
+        `/repos/${owner}/${repo}/issues/${issue.number}/comments?per_page=100`
+    );
+    
+    if (commentsResponse.status !== 200) {
+        log(`Failed to fetch comments: ${JSON.stringify(commentsResponse.data)}`);
+        return false;
+    }
+    
+    // Filter for CLAIM comments and sort by creation time (server timestamp)
+    const claims = commentsResponse.data
+        .filter(c => c.body && c.body.startsWith('CLAIM:'))
+        .sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
+    
+    // Step 4: Check if our claim was first
+    if (claims.length === 0 || claims[0].id !== ourCommentId) {
+        // We lost the race - another worker claimed first
+        const winner = claims.length > 0 ? claims[0].body.split(':')[1] : 'unknown';
+        log(`Lost claim race to worker ${winner}, skipping issue #${issue.number}`);
+        
+        // Clean up our claim comment
+        await github('DELETE',
+            `/repos/${owner}/${repo}/issues/comments/${ourCommentId}`
+        );
+        
+        return false;
+    }
+    
+    // We won! Add in-progress label
+    log(`Won claim for issue #${issue.number}!`);
+    
     const labelResponse = await github('POST',
         `/repos/${owner}/${repo}/issues/${issue.number}/labels`,
         { labels: ['in-progress'] }
     );
     
     if (labelResponse.status !== 200) {
-        log(`Failed to add label: ${JSON.stringify(labelResponse.data)}`);
-        return false;
+        log(`Warning: Failed to add in-progress label: ${JSON.stringify(labelResponse.data)}`);
+        // Continue anyway since we have the claim
     }
     
-    // Add comment that we're working on it
-    await github('POST',
-        `/repos/${owner}/${repo}/issues/${issue.number}/comments`,
-        { body: `🤖 Agent \`${WORKER_ID}\` is now working on this issue.` }
+    // Update our claim comment to a nicer message
+    await github('PATCH',
+        `/repos/${owner}/${repo}/issues/comments/${ourCommentId}`,
+        { body: `🤖 Agent \`${WORKER_ID}\` claimed and is now working on this issue.` }
     );
     
     return true;
@@ -488,11 +552,14 @@ async function pollForIssues() {
     
     if (issue) {
         await processIssue(issue);
-        // Immediately check for more issues
+        // Add small random jitter before next poll to reduce collisions
+        const jitter = Math.random() * 5000;
+        await sleep(jitter);
         setImmediate(pollForIssues);
     } else {
-        // No issues, wait and poll again
-        setTimeout(pollForIssues, POLL_INTERVAL);
+        // No issues, wait and poll again with jitter
+        const jitter = Math.random() * 10000;
+        setTimeout(pollForIssues, POLL_INTERVAL + jitter);
     }
 }
 
@@ -564,8 +631,13 @@ async function main() {
     // Clone/update repository
     await ensureRepoCloned();
     
-    log(`⏳ Starting issue polling (interval: ${POLL_INTERVAL/1000}s)`);
+    // Add startup jitter to stagger workers (0-15 seconds)
+    const startupJitter = Math.random() * 15000;
+    log(`⏳ Starting issue polling in ${(startupJitter/1000).toFixed(1)}s (stagger delay)`);
+    log(`   Poll interval: ${POLL_INTERVAL/1000}s`);
     log(`   Looking for issues with label: "${ISSUE_LABEL}"`);
+    
+    await sleep(startupJitter);
     
     // Start polling
     pollForIssues();
