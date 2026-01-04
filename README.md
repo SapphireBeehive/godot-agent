@@ -461,6 +461,101 @@ See [docs/GITHUB_APP_SETUP.md](docs/GITHUB_APP_SETUP.md) for full setup.
 | Git setup | Uses host's git config | Fresh clone, auto-configured |
 | Best for | Interactive development | Autonomous agents |
 
+## Pool Mode (Multiple Isolated Agents)
+
+Pool mode runs multiple isolated agents in parallel, each processing GitHub issues from the same repository. Perfect for:
+- Processing a backlog of issues automatically
+- Running multiple agents 24/7 to handle incoming work
+- Scaling up for large refactoring or feature batches
+
+```
+┌─────────────────────────────────────────────────────────────────────────┐
+│  POOL MODE - Multiple Isolated Agents                                   │
+│                                                                         │
+│                    GitHub Repository                                    │
+│                          │                                              │
+│        ┌─────────────────┼─────────────────┐                           │
+│        ▼                 ▼                 ▼                           │
+│   ┌─────────┐       ┌─────────┐       ┌─────────┐                      │
+│   │ Worker 1│       │ Worker 2│       │ Worker 3│   ...more            │
+│   │ ─────── │       │ ─────── │       │ ─────── │                      │
+│   │ Issue #5│       │ Issue #8│       │ Issue #12│                     │
+│   │  (own   │       │  (own   │       │  (own   │                      │
+│   │  clone) │       │  clone) │       │  clone) │                      │
+│   └────┬────┘       └────┬────┘       └────┬────┘                      │
+│        │                 │                 │                           │
+│        └─────────────────┼─────────────────┘                           │
+│                          ▼                                              │
+│                    Pull Requests                                        │
+└─────────────────────────────────────────────────────────────────────────┘
+```
+
+### Quick Start
+
+```bash
+# Start a pool of 3 workers
+make pool-start REPO=myorg/my-godot-game WORKERS=3
+
+# Check worker status
+make pool-status
+
+# Watch logs from all workers
+make pool-logs
+
+# Scale up to 5 workers
+make pool-scale WORKERS=5
+
+# Stop all workers
+make pool-stop
+```
+
+### How It Works
+
+1. **Workers start** - Each worker clones the repository into its own isolated Docker volume
+2. **Issue polling** - Workers poll GitHub for issues labeled `agent-ready` (configurable)
+3. **Claim & work** - Worker claims an issue by adding `in-progress` label, creates a branch, runs Claude
+4. **Open PR** - When done, worker pushes branch and opens a PR referencing the issue
+5. **Next issue** - Worker returns to base branch and polls for more issues
+
+### Required Labels
+
+Create these labels in your GitHub repository:
+
+| Label | Purpose |
+|-------|---------|
+| `agent-ready` | Issues ready for agent processing (trigger label) |
+| `in-progress` | Auto-added when an agent claims an issue |
+| `agent-complete` | Auto-added when work is done and PR created |
+| `agent-failed` | Auto-added if the agent encounters an error |
+
+### Configuration
+
+```bash
+# Environment variables (in .env or exported)
+GITHUB_REPO=myorg/my-godot-game       # Repository to work on
+ISSUE_LABEL=agent-ready                # Label to filter issues (default)
+POLL_INTERVAL=60                       # Seconds between issue checks
+WORKERS=3                              # Number of parallel workers
+```
+
+### Example Workflow
+
+1. **Triage issues** - Review and label issues that are ready for automation
+2. **Add `agent-ready` label** - This queues the issue for processing
+3. **Agents claim and work** - Workers automatically pick up and process issues
+4. **Review PRs** - Agents open PRs that you review and merge
+5. **Issues update** - Labels change to show progress (`in-progress` → `agent-complete`)
+
+### Pool vs Queue Mode
+
+| Feature | Pool Mode | Queue Mode |
+|---------|-----------|------------|
+| Task source | GitHub issues | Local file queue |
+| Workspace | Isolated (per worker) | Shared project directory |
+| Parallelism | Multiple workers | Single processor |
+| Output | Pull requests | Direct file changes |
+| Best for | Autonomous issue processing | Batch tasks on local project |
+
 ## Queue Mode (Async Processing)
 
 Queue mode lets you add tasks to a directory and have Claude process them automatically in the background. Perfect for:

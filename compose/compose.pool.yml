@@ -1,0 +1,106 @@
+# compose.pool.yml - Pool of isolated agents processing GitHub issues
+# Use with: docker compose -f compose.base.yml -f compose.pool.yml up -d --scale worker=3
+#
+# Each worker:
+# 1. Has its own isolated workspace (Docker volume)
+# 2. Clones the repository on startup
+# 3. Polls GitHub for issues labeled with ISSUE_LABEL (default: "agent-ready")
+# 4. Claims issues by adding an "in-progress" label
+# 5. Creates a branch, works on the issue, opens a PR
+# 6. Moves to the next issue
+#
+# Required environment variables:
+#   GITHUB_REPO                    - Repository to work on (e.g., "owner/repo")
+#   GITHUB_APP_ID                  - GitHub App ID for authentication
+#   GITHUB_APP_INSTALLATION_ID     - GitHub App installation ID
+#   GITHUB_APP_PRIVATE_KEY[_PATH]  - App private key
+#
+# Optional:
+#   ISSUE_LABEL         - Label to filter issues (default: "agent-ready")
+#   POLL_INTERVAL       - Seconds between issue checks (default: 60)
+#   WORKER_COUNT        - Number of workers to start (default: 3)
+
+services:
+  # Workers poll for issues and process them autonomously
+  worker:
+    build:
+      context: ../image
+      dockerfile: Dockerfile
+      args:
+        - GODOT_VERSION=${GODOT_VERSION:-4.6}
+        - GODOT_RELEASE_TYPE=${GODOT_RELEASE_TYPE:-beta2}
+    image: claude-godot-agent:latest
+    # No container_name - allows scaling
+    
+    # Run the issue worker script
+    command: ["node", "/opt/scripts/issue-worker.js"]
+    restart: unless-stopped
+    
+    environment:
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+      - CLAUDE_CODE_OAUTH_TOKEN=${CLAUDE_CODE_OAUTH_TOKEN:-}
+      # Repository configuration
+      - GITHUB_REPO=${GITHUB_REPO:-}
+      - GITHUB_BRANCH=${GITHUB_BRANCH:-main}
+      # GitHub App authentication (required)
+      - GITHUB_APP_ID=${GITHUB_APP_ID:-}
+      - GITHUB_APP_INSTALLATION_ID=${GITHUB_APP_INSTALLATION_ID:-}
+      - GITHUB_APP_PRIVATE_KEY=${GITHUB_APP_PRIVATE_KEY:-}
+      - GITHUB_APP_PRIVATE_KEY_PATH=${GITHUB_APP_PRIVATE_KEY_PATH:-}
+      - GITHUB_APP_REPOSITORIES=${GITHUB_APP_REPOSITORIES:-}
+      # Issue processing configuration
+      - ISSUE_LABEL=${ISSUE_LABEL:-agent-ready}
+      - POLL_INTERVAL=${POLL_INTERVAL:-60}
+      - HOME=/home/claude
+      - USER=claude
+    
+    # Network: sandbox only, use dnsfilter for DNS
+    networks:
+      sandbox_net:
+    dns:
+      - 10.100.1.2  # dnsfilter
+    
+    # Each worker gets its own anonymous volume
+    volumes:
+      - worker_data:/project:rw
+      - ../secrets:/secrets:ro
+      - ../image/scripts/issue-worker.js:/opt/scripts/issue-worker.js:ro
+    
+    # Security hardening
+    read_only: true
+    tmpfs:
+      - /tmp:size=100M,mode=1777
+      - /home/claude:size=50M,mode=0755,uid=1000,gid=1000
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    
+    # Resource limits
+    deploy:
+      resources:
+        limits:
+          memory: ${AGENT_MEMORY_LIMIT:-2G}
+          cpus: "${AGENT_CPU_LIMIT:-2.0}"
+          pids: 256
+        reservations:
+          memory: 256M
+    
+    depends_on:
+      dnsfilter:
+        condition: service_started
+      proxy_github:
+        condition: service_started
+      proxy_anthropic_api:
+        condition: service_started
+    
+    working_dir: /project
+
+volumes:
+  worker_data:
+    # Each scaled instance gets its own volume
+
+networks:
+  sandbox_net:
+    external: true
+    name: claude-godot-sandbox_sandbox_net

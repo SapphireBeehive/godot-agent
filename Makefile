@@ -12,6 +12,7 @@
         up-agent down-agent up-isolated down-isolated \
         claude claude-print claude-shell agent-status verify-permissions \
         queue-start queue-stop queue-status queue-logs queue-add queue-init queue-results \
+        pool-start pool-stop pool-status pool-logs pool-scale \
         github-app-test github-app-validate
 
 # Default target
@@ -60,6 +61,11 @@ help: ## Show this help message
 	@echo "  make claude P=\"fix issue #1\"   # Agent works in isolation"
 	@echo "  make down-isolated             # Stop (destroys workspace)"
 	@echo ""
+	@echo "$(CYAN)Pool Mode (multiple agents processing issues):$(RESET)"
+	@echo "  make pool-start REPO=org/repo WORKERS=3  # Start 3 isolated workers"
+	@echo "  make pool-status               # Check worker status"
+	@echo "  make pool-stop                 # Stop all workers"
+	@echo ""
 	@echo "$(GREEN)Quick Start (One-shot Mode):$(RESET)"
 	@echo "  make run-direct PROJECT=/path/to/project"
 	@echo ""
@@ -70,6 +76,7 @@ help: ## Show this help message
 	@echo "$(GREEN)Examples:$(RESET)"
 	@echo "  make up-agent PROJECT=~/my-godot-game"
 	@echo "  make claude P=\"Add player movement\""
+	@echo "  make pool-start REPO=myorg/mygame WORKERS=5"
 	@echo "  make run-direct PROJECT=~/my-godot-game"
 	@echo "  make run-staging STAGING=~/staging LIVE=~/my-godot-game"
 	@echo "  make run-godot PROJECT=~/my-godot-game ARGS='--version'"
@@ -156,6 +163,8 @@ validate: ## Validate compose configuration
 		echo "✓ compose.isolated.yml is valid"
 	@cd $(COMPOSE_DIR) && docker compose -f compose.base.yml -f compose.queue.yml config --quiet && \
 		echo "✓ compose.queue.yml is valid"
+	@cd $(COMPOSE_DIR) && docker compose -f compose.base.yml -f compose.pool.yml config --quiet && \
+		echo "✓ compose.pool.yml is valid"
 	@cd $(COMPOSE_DIR) && docker compose -f compose.offline.yml config --quiet && \
 		echo "✓ compose.offline.yml is valid"
 	@echo "All compose files valid!"
@@ -391,6 +400,62 @@ queue-results: _check-project ## Show latest result (PROJECT=/path)
 	else \
 		echo "No results yet."; \
 	fi
+
+#==============================================================================
+# POOL MODE (multiple isolated agents processing GitHub issues)
+#==============================================================================
+
+WORKERS ?= 3
+ISSUE_LABEL ?= agent-ready
+
+pool-start: _check-repo _check-auth ## Start worker pool (REPO=owner/repo WORKERS=3)
+	@echo "Starting infrastructure services..."
+	@./$(SCRIPT_DIR)/up.sh
+	@echo ""
+	@echo "Starting worker pool..."
+	@echo "  Repository: $(REPO)"
+	@echo "  Workers: $(WORKERS)"
+	@echo "  Issue Label: $(ISSUE_LABEL)"
+	@echo ""
+	@cd $(COMPOSE_DIR) && GITHUB_REPO=$(REPO) ISSUE_LABEL=$(ISSUE_LABEL) \
+		docker compose --env-file ../.env -f compose.base.yml -f compose.pool.yml up -d --scale worker=$(WORKERS)
+	@echo ""
+	@echo "Worker pool running!"
+	@echo ""
+	@echo "Workers will:"
+	@echo "  1. Clone $(REPO) into isolated workspaces"
+	@echo "  2. Poll for issues labeled '$(ISSUE_LABEL)'"
+	@echo "  3. Claim issues, create branches, run Claude"
+	@echo "  4. Open PRs for completed work"
+	@echo ""
+	@echo "Commands:"
+	@echo "  make pool-status               - Show worker status"
+	@echo "  make pool-logs                 - Follow worker logs"
+	@echo "  make pool-scale WORKERS=5      - Scale to 5 workers"
+	@echo "  make pool-stop                 - Stop all workers"
+
+pool-stop: ## Stop worker pool
+	@echo "Stopping worker pool..."
+	@cd $(COMPOSE_DIR) && docker compose --env-file ../.env -f compose.base.yml -f compose.pool.yml down -v
+	@echo "Worker pool stopped and workspaces destroyed."
+
+pool-status: ## Show worker pool status
+	@echo "╔══════════════════════════════════════════════════════════════════════╗"
+	@echo "║                       Worker Pool Status                             ║"
+	@echo "╚══════════════════════════════════════════════════════════════════════╝"
+	@echo ""
+	@cd $(COMPOSE_DIR) && docker compose --env-file ../.env -f compose.base.yml -f compose.pool.yml ps worker 2>/dev/null || echo "Pool not running"
+	@echo ""
+	@RUNNING=$$(docker ps --filter "name=compose-worker" --format '{{.Names}}' 2>/dev/null | wc -l | tr -d ' '); \
+	echo "Active workers: $$RUNNING"
+
+pool-logs: ## Follow worker pool logs
+	@cd $(COMPOSE_DIR) && docker compose --env-file ../.env -f compose.base.yml -f compose.pool.yml logs -f worker
+
+pool-scale: _check-auth ## Scale worker pool (WORKERS=N)
+	@echo "Scaling worker pool to $(WORKERS) workers..."
+	@cd $(COMPOSE_DIR) && docker compose --env-file ../.env -f compose.base.yml -f compose.pool.yml up -d --scale worker=$(WORKERS)
+	@echo "Pool scaled to $(WORKERS) workers."
 
 #==============================================================================
 # GODOT OPERATIONS
@@ -681,6 +746,10 @@ a: agent-status
 q: queue-status
 qs: queue-start
 qx: queue-stop
+p: pool-status
+ps: pool-start
+px: pool-stop
+pl: pool-logs
 
 # Print configuration
 config: ## Show current configuration
