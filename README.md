@@ -307,22 +307,39 @@ The Makefile is for **you (the human)** to run on your Mac — it manages the sa
 
 You can use either `make` targets or scripts directly:
 
-| Make Command | Script Equivalent |
-|--------------|-------------------|
-| `make doctor` | `./scripts/doctor.sh` |
-| `make build` | `./scripts/build.sh` |
-| `make up` | `./scripts/up.sh` |
-| `make up-agent PROJECT=...` | Start persistent agent container |
+| Make Command | Description |
+|--------------|-------------|
+| `make doctor` | Check environment health |
+| `make build` | Build the agent container image |
+| `make up` | Start infrastructure (DNS + proxies) |
+| **Persistent Mode** | |
+| `make up-agent PROJECT=...` | Start persistent agent with local project |
 | `make claude` | Interactive Claude session |
 | `make claude P="..."` | Single prompt execution |
 | `make claude-print P="..."` | Non-interactive batch mode (for scripts/CI) |
+| `make claude-shell` | Open bash shell in agent |
+| `make agent-status` | Check if agent is running |
 | `make down-agent` | Stop persistent agent |
+| **Isolated Mode** | |
+| `make up-isolated REPO=...` | Start isolated agent (clones repo) |
+| `make up-isolated REPO=... BRANCH=...` | Start with specific branch |
+| `make down-isolated` | Stop agent and destroy workspace |
+| **Queue Mode** | |
 | `make queue-start PROJECT=...` | Start async queue processor |
 | `make queue-add TASK="..." NAME=...` | Add task to queue |
 | `make queue-status PROJECT=...` | Show queue status |
+| `make queue-logs` | Follow queue processor logs |
 | `make queue-stop` | Stop queue processor |
-| `make run-direct PROJECT=...` | `./scripts/run-claude.sh direct ...` |
-| `make logs` | `docker compose logs -f` |
+| **One-shot Mode** | |
+| `make run-direct PROJECT=...` | Run Claude in direct mode |
+| `make run-staging STAGING=...` | Run Claude in staging mode |
+| `make run-offline PROJECT=...` | Run Claude in offline mode |
+| **Observability** | |
+| `make logs` | Follow all service logs |
+| `make logs-dns` | Follow DNS filter logs |
+| `make logs-report` | Generate network activity report |
+| **Testing** | |
+| `make test-security` | Run all security tests |
 | `make ci` | Run CI workflow locally with `act` |
 
 Run `make help` to see all available targets.
@@ -380,6 +397,69 @@ make down-agent
 - No 3-5 second container startup for each interaction
 - Claude maintains conversation context across commands
 - Multiple terminal windows can attach to the same session
+
+## Isolated Mode (Autonomous Agent)
+
+Isolated mode lets the agent clone a repository into its own isolated workspace. Perfect for:
+- Autonomous agents that work independently
+- Multi-agent workflows where each agent has its own workspace
+- CI/CD integration where you don't want to mount host directories
+- Maximum isolation from host filesystem
+
+```bash
+# Start isolated agent (clones repo on startup)
+make up-isolated REPO=owner/repo
+
+# Optionally specify a branch
+make up-isolated REPO=owner/repo BRANCH=feature-branch
+
+# Run Claude commands (same as persistent mode)
+make claude                        # Interactive session
+make claude P="fix issue #42"      # Single prompt
+
+# Check agent status
+make agent-status
+
+# Stop and destroy workspace
+make down-isolated
+```
+
+### How It Works
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│  ISOLATED MODE                                              │
+│                                                             │
+│  1. Container starts with GITHUB_REPO env var               │
+│  2. Entrypoint script clones the repo to /project           │
+│  3. Creates a working branch: claude/work-YYYYMMDD-HHMMSS   │
+│  4. Agent works in complete isolation                       │
+│  5. Changes pushed via MCP tools or git push                │
+│  6. Workspace destroyed when container stops                │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### Required Configuration
+
+Isolated mode requires GitHub App authentication for cloning and pushing:
+
+```bash
+# In .env file
+GITHUB_APP_ID=123456
+GITHUB_APP_INSTALLATION_ID=12345678
+GITHUB_APP_PRIVATE_KEY_PATH=./secrets/github-app-private-key.pem
+```
+
+See [docs/GITHUB_APP_SETUP.md](docs/GITHUB_APP_SETUP.md) for full setup.
+
+### Isolated vs Persistent Mode
+
+| Feature | Persistent Mode | Isolated Mode |
+|---------|-----------------|---------------|
+| Workspace | Mounted from host | Cloned fresh on startup |
+| Files after stop | Persist on host | **Destroyed** |
+| Git setup | Uses host's git config | Fresh clone, auto-configured |
+| Best for | Interactive development | Autonomous agents |
 
 ## Queue Mode (Async Processing)
 
@@ -850,7 +930,10 @@ godot-agent/
 │       └── ci.yml              # Validate + test on PRs
 ├── compose/
 │   ├── compose.base.yml      # Networks + DNS + proxies
-│   ├── compose.direct.yml    # Direct mount agent
+│   ├── compose.direct.yml    # Direct mount agent (one-shot)
+│   ├── compose.persistent.yml # Persistent agent container
+│   ├── compose.isolated.yml  # Isolated agent (clones repo)
+│   ├── compose.queue.yml     # Queue processor daemon
 │   ├── compose.staging.yml   # Staging mount agent
 │   └── compose.offline.yml   # Offline mode
 ├── configs/
