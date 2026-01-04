@@ -1,6 +1,6 @@
 # Sandboxed Godot Agent Context
 
-*Last updated: 2026-01-03*
+*Last updated: 2026-01-03 (revised)*
 
 ---
 
@@ -65,8 +65,9 @@ You are running inside a **sandboxed Docker container** with restricted network 
 12. [Security Boundaries](#security-boundaries)
 13. [Best Practices](#best-practices)
 14. [Troubleshooting](#troubleshooting)
-15. [Getting Help](#getting-help)
-16. [Appendix A: Godot Engine Reference](#appendix-a-godot-engine-reference)
+15. [Lessons Learned](#lessons-learned)
+16. [Getting Help](#getting-help)
+17. [Appendix A: Godot Engine Reference](#appendix-a-godot-engine-reference)
 
 ---
 
@@ -87,12 +88,19 @@ You are running inside a **sandboxed Docker container** with restricted network 
 | Task | Tool |
 |------|------|
 | List issues | `list_issues` |
+| Search issues | `search_issues` |
 | Get issue details | `get_issue` |
 | Claim issue | `create_issue_comment` |
+| Create issue | `create_issue` |
 | Create PR | `create_pull_request` |
+| List PRs | `list_pull_requests` |
+| Get PR details | `get_pull_request` |
 | Read remote file | `get_file_contents` |
 | Search code | `search_code` |
 | Push files | `push_files` |
+| Create branch | `create_branch` |
+
+*See [GitHub Access via MCP Tools](#github-access-via-mcp-tools) for complete list and examples.*
 
 ### Priority Labels (Work on Higher Priority First!)
 
@@ -156,6 +164,18 @@ You are running inside a **sandboxed Docker container** with restricted network 
 │    - Read-only root filesystem                              │
 └─────────────────────────────────────────────────────────────┘
 ```
+
+### Available Environment Variables
+
+| Variable | Purpose | Example |
+|----------|---------|---------|
+| `GITHUB_REPO` | Target repository (owner/repo format) | `myorg/my-game` |
+| `GITHUB_APP_ID` | GitHub App ID for authentication | `12345` |
+| `GITHUB_APP_INSTALLATION_ID` | Installation ID for the App | `67890` |
+| `GITHUB_DEBUG` | Enable verbose MCP debugging when set | `1` |
+| `GITHUB_VERIFY_REPO` | Override repo for MCP verification script | `owner/repo` |
+
+**Note:** These are set by the container orchestration. You typically don't need to modify them.
 
 ### Isolated Mode vs Mounted Mode
 
@@ -443,7 +463,7 @@ Use create_issue_comment:
       Queue item: task-001
 ```
 
-Then proceed to **[Step 3: Create a Feature Branch](#step-3-create-a-feature-branch)** in the Issue Mode workflow below.
+Then proceed to **Step 3: Create a Feature Branch** in the [Issue Mode Workflow](#issue-mode-workflow-standard) below.
 
 ### Queue Mode Summary
 
@@ -973,6 +993,18 @@ git log --oneline
 
 **For remote operations (push, pull, clone), prefer MCP tools** when possible as they provide better error handling and don't require manual credential management.
 
+### Git Push vs MCP Push: When to Use Each
+
+| Situation | Recommended | Why |
+|-----------|-------------|-----|
+| Isolated Mode (repo cloned at startup) | `git push` | Git remote is pre-configured with auth |
+| Authentication errors with `git push` | MCP `push_files` | MCP handles auth automatically |
+| Need atomic multi-file update | MCP `push_files` | Single API call, no partial failures |
+| Simple push after local commits | `git push` | Faster, uses existing git workflow |
+| Mounted Mode (no git remote configured) | MCP `push_files` | No git credentials in container |
+
+**Rule of thumb:** Try `git push` first. If it fails with auth errors, use MCP `push_files`.
+
 ## Network Access
 
 You can **only** reach these domains (via proxy):
@@ -1000,7 +1032,7 @@ You can **only** reach these domains (via proxy):
 
 ```bash
 # Create a feature branch
-git checkout -b claude/my-feature
+git checkout -b godot-agent/my-feature
 
 # Make changes, commit locally
 git add .
@@ -1021,7 +1053,7 @@ Use create_pull_request:
   - repo: repo
   - title: "Add new feature"
   - body: "Description of changes"
-  - head: claude/my-feature
+  - head: godot-agent/my-feature
   - base: main
 ```
 
@@ -1075,6 +1107,7 @@ func take_damage(amount: int) -> void:
 | `/project` | Read/Write | Your working directory (mounted from host) |
 | `/home/claude` | Read/Write | Home directory (tmpfs, not persisted) |
 | `/tmp` | Read/Write | Temporary files (tmpfs) |
+| `/opt/scripts` | Read-only | Pre-installed helper scripts (verify-mcp.sh, etc.) |
 | Everything else | Read-only | System files |
 
 ### Important Notes
@@ -1102,6 +1135,22 @@ This sandbox prevents damage to the host system and limits blast radius if somet
 - Run privileged operations *(no sudo/root access)*
 
 **If you need capabilities not listed here, you're probably approaching the problem wrong.** Ask yourself: can this be done with MCP tools, existing commands, or a different approach?
+
+### If Secrets Are Accidentally Exposed
+
+If you accidentally print or log a secret (token, key, credential):
+
+1. **Stop immediately** — Don't continue the operation that exposed the secret
+2. **Note the exposure** — Document what was exposed in your PR description or issue comment
+3. **Don't try to "fix" it** — You likely can't delete logs or command history
+4. **Humans will handle rotation** — They need to revoke and regenerate the compromised credential
+5. **Learn from it** — Add to your mental model: never echo/print/log credential values
+
+**Common exposure vectors to avoid:**
+- `echo $TOKEN` or `echo "$SECRET"` in bash
+- `print(os.environ["API_KEY"])` in Python
+- Logging request headers that contain auth tokens
+- `cat ~/.claude.json` (contains GitHub token)
 
 ## Best Practices
 
@@ -1133,8 +1182,8 @@ Always comment on an issue before starting work:
 Always work on a branch, never directly on main:
 
 ```bash
-# Naming: claude/issue-N-description
-git checkout -b claude/issue-15-fix-player-jump
+# Naming: godot-agent/issue-N-description
+git checkout -b godot-agent/issue-15-fix-player-jump
 ```
 
 ### 4. Commit Often
@@ -1307,12 +1356,15 @@ If MCP tools aren't working:
 
 ### MCP Tool Failures
 
-| Error | Cause | Solution |
-|-------|-------|----------|
-| "Not Found" from `get_issue` | Issue doesn't exist or wrong repo | Verify `owner/repo` format and issue number |
-| "Resource not accessible" | Permission issue | Check if repo is private; token may lack access |
-| "Validation Failed" | Missing required fields | Check all required parameters are provided |
-| Push/PR creation fails | Branch protection or conflict | Pull latest main, rebase your branch |
+| Error Message | Cause | Solution |
+|---------------|-------|----------|
+| `{"message": "Not Found"}` | Issue/repo doesn't exist | Verify `owner/repo` format and issue number exist |
+| `{"message": "Resource not accessible by integration"}` | Permission issue | Token lacks access to this repo; check App installation |
+| `{"message": "Validation Failed", "errors": [...]}` | Missing required fields | Check all required parameters; read the `errors` array for details |
+| `{"message": "Reference already exists"}` | Branch name conflict | Use a unique branch name or delete the existing branch |
+| `{"message": "Bad credentials"}` | Token expired or invalid | Restart container to regenerate token |
+| `{"message": "API rate limit exceeded"}` | Too many requests | Wait for rate limit reset (usually 1 hour) |
+| Push/PR creation fails silently | Branch protection or conflict | Pull latest main, rebase your branch |
 | "MCP tools not available" | Server not running | Run `/opt/scripts/verify-mcp.sh --verbose` |
 
 ### Network Issues
@@ -1352,7 +1404,7 @@ godot --headless --validate-project 2>&1
 | "Push rejected" to main/master | You can't push to protected branches; create a feature branch first |
 | "Authentication failed" | Use MCP tools (`push_files`) instead of `git push` |
 | Merge conflicts | `git fetch origin main && git rebase origin/main`, resolve conflicts, test, then push |
-| "Detached HEAD" | `git checkout -b claude/recovery-branch` to save your work |
+| "Detached HEAD" | `git checkout -b godot-agent/recovery-branch` to save your work |
 
 ### Common Workflow Problems
 
@@ -1370,6 +1422,57 @@ godot --headless --validate-project 2>&1
 - Look for `project.godot` - this defines the project root
 - Run `godot --headless --validate-project` from that directory
 - Check if you're in a subdirectory of the project
+
+---
+
+## Lessons Learned
+
+This section documents critical issues encountered and their solutions. Learn from these to avoid repeating mistakes.
+
+### Issue: Branch Naming Confusion
+
+**Problem:** Inconsistent branch prefixes (`claude/` vs `godot-agent/`) caused confusion in repository history.
+
+**Root Cause:** Documentation examples used different prefixes in different sections.
+
+**Solution:** Always use `godot-agent/` prefix for all branches:
+- `godot-agent/issue-N-description` for issue work
+- `godot-agent/prompt-description` for prompt work
+- `godot-agent/queue-id-description` for queue work
+
+**Verification:** `git branch -a | grep -E "(claude/|godot-agent/)"` should only show `godot-agent/` branches.
+
+### Issue: MCP Token Misuse
+
+**Problem:** Attempted to extract `GITHUB_PERSONAL_ACCESS_TOKEN` from `~/.claude.json` for use with `gh` CLI.
+
+**Root Cause:** Misunderstanding of token purpose—it's a GitHub App installation token, not a PAT.
+
+**Solution:** Never extract this token. Use MCP tools exclusively for GitHub API operations. The `gh` CLI is not available in the sandbox anyway.
+
+**Verification:** Only use MCP tools like `list_issues`, `create_pull_request`, etc.
+
+### Issue: Looking for MCP Config in Wrong File
+
+**Problem:** Searched `~/.claude/settings.json` for MCP server configuration.
+
+**Root Cause:** Confusion between the two Claude configuration files.
+
+**Solution:** 
+- MCP servers → `~/.claude.json` (root config)
+- Permissions/settings → `~/.claude/settings.json`
+
+**Verification:** `cat ~/.claude.json | jq .mcpServers` shows the github server config.
+
+### Issue: Tests Not Found in CI
+
+**Problem:** Tests passed locally but CI reported "test file not found."
+
+**Root Cause:** New test files weren't committed (`git add` was missing).
+
+**Solution:** Always run `git status` before pushing to verify all files are staged.
+
+**Verification:** `git status` shows no untracked files in test directories.
 
 ---
 
