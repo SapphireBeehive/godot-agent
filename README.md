@@ -44,7 +44,7 @@ A secure, sandboxed environment for running Claude Code with Godot game developm
 │  │ (Godot proj) │  │  │    │           │  /project (mount)         │    │ │ │
 │  └──────────────┘  │  │    └───────────┴───────────────────────────┘    │ │ │
 │                    │  │                        │                        │ │ │
-│  Trust Boundary ═══╪══╪══════════════════════════════════════════════════╪ │
+│  Trust Boundary ═══╪══╪═════════════════════════════════════════════════╪ │ │ 
 │       ▼            │  │    ┌───────────────────┴───────────────────┐    │ │ │
 │                    │  │    │              dnsfilter                │    │ │ │
 │                    │  │    │              (CoreDNS)                │    │ │ │
@@ -474,17 +474,17 @@ Pool mode runs multiple isolated agents in parallel, each processing GitHub issu
 │                                                                         │
 │                    GitHub Repository                                    │
 │                          │                                              │
-│        ┌─────────────────┼─────────────────┐                           │
-│        ▼                 ▼                 ▼                           │
-│   ┌─────────┐       ┌─────────┐       ┌─────────┐                      │
-│   │ Worker 1│       │ Worker 2│       │ Worker 3│   ...more            │
-│   │ ─────── │       │ ─────── │       │ ─────── │                      │
-│   │ Issue #5│       │ Issue #8│       │ Issue #12│                     │
-│   │  (own   │       │  (own   │       │  (own   │                      │
-│   │  clone) │       │  clone) │       │  clone) │                      │
-│   └────┬────┘       └────┬────┘       └────┬────┘                      │
-│        │                 │                 │                           │
-│        └─────────────────┼─────────────────┘                           │
+│        ┌─────────────────┼─────────────────┐                            │
+│        ▼                 ▼                 ▼                            │
+│   ┌─────────┐       ┌─────────┐       ┌─────────┐                       │
+│   │ Worker 1│       │ Worker 2│       │ Worker 3│   ...more             │
+│   │ ─────── │       │ ─────── │       │ ─────── │                       │
+│   │ Issue #5│       │ Issue #8│       │ Issue #9│                       │
+│   │  (own   │       │  (own   │       │  (own   │                       │
+│   │  clone) │       │  clone) │       │  clone) │                       │
+│   └────┬────┘       └────┬────┘       └────┬────┘                       │
+│        │                 │                 │                            │
+│        └─────────────────┼─────────────────┘                            │
 │                          ▼                                              │
 │                    Pull Requests                                        │
 └─────────────────────────────────────────────────────────────────────────┘
@@ -532,7 +532,7 @@ Create these labels in your GitHub repository:
 
 ```bash
 # Environment variables (in .env or exported)
-GITHUB_REPO=myorg/my-godot-game       # Repository to work on
+GITHUB_REPO=myorg/my-godot-game        # Repository to work on
 ISSUE_LABEL=agent-ready                # Label to filter issues (default)
 POLL_INTERVAL=60                       # Seconds between issue checks
 WORKERS=3                              # Number of parallel workers
@@ -919,8 +919,8 @@ The GitHub Action builds for both architectures automatically with automatic che
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│                    GitHub Actions Workflow                       │
-│                 platforms: linux/amd64,linux/arm64               │
+│                    GitHub Actions Workflow                      │
+│                 platforms: linux/amd64,linux/arm64              │
 └─────────────────────────────────────────────────────────────────┘
                               │
             ┌─────────────────┴─────────────────┐
