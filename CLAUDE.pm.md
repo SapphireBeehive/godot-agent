@@ -544,6 +544,50 @@ Repository: OWNER/REPO
 
 ---
 
+## Token Efficiency: Pre-check Gate
+
+The PM loop includes a **lightweight bash pre-check gate** that runs before each Claude invocation. This avoids spending ~15K tokens on idle cycles where there is nothing actionable.
+
+### How It Works
+
+Before invoking Claude, the loop runs two cheap `gh` API calls:
+
+1. **Agent PR check** — Are there any open PRs from `claude/*` or `godot-agent/*` branches?
+2. **Closed-issue hash** — Has the set of closed issue numbers changed since last cycle?
+
+If neither condition is true, Claude is skipped entirely for that cycle.
+
+### Behavior by Mode
+
+| Mode | Pre-check | Reason |
+|------|-----------|--------|
+| Standalone | **Enabled** | Has `gh` CLI available |
+| Container | Disabled (always invoke) | No `gh` CLI; uses MCP tools inside Claude |
+| Docker-exec | Disabled (always invoke) | `gh` not available in container |
+
+### State Persistence
+
+The pre-check stores a SHA hash of the closed-issue set in `${PM_LOG_DIR}/.pm_state`. This persists across cycles so only **changes** in closed issues trigger invocation.
+
+### Stats Tracking
+
+The loop tracks and reports:
+- **Cycles invoked** — Claude was called (action was needed)
+- **Cycles skipped** — Pre-check determined no action needed
+- **Cycles total** — Sum of invoked + skipped
+
+Stats are logged each cycle and printed as a final summary on shutdown (Ctrl+C).
+
+### Expected Impact
+
+In a typical run where 85% of PM cycles are idle, the pre-check eliminates those idle invocations — reducing token usage by ~85% while keeping response latency the same for active cycles.
+
+### Override
+
+The `--once` flag bypasses the pre-check and always invokes Claude (useful for debugging or manual checks).
+
+---
+
 ## Important Notes
 
 1. **Completion = CLOSED issue** - Not a label, the actual issue state
@@ -551,6 +595,7 @@ Repository: OWNER/REPO
 3. **Be idempotent** - Running the same check twice should produce consistent results
 4. **Only manage agent tasks** - Ignore issues without `agent_task: true` header
 5. **Minimize API calls** - Batch operations where possible to stay within rate limits
+6. **Pre-check gate** - In standalone mode, the loop script gates Claude invocation behind two cheap `gh` API calls to avoid wasting tokens on idle cycles
 
 ---
 

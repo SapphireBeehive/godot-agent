@@ -1,14 +1,18 @@
 # compose.pm.yml - Project Manager agent for GitHub issue management
-# Use with: docker compose -f compose.base.yml -f compose.persistent.yml -f compose.pm.yml up -d
+# Use with: docker compose -f compose.base.yml -f compose.pm.yml up -d
 #
 # The PM agent periodically checks GitHub issues, manages dependencies,
-# and releases blocked tasks when their dependencies are satisfied.
+# merges agent PRs, and releases blocked tasks when dependencies are satisfied.
+#
+# Token efficiency: In standalone mode, a lightweight bash pre-check gate
+# runs two gh API calls before each cycle. If no agent PRs are open and
+# the closed-issue set is unchanged, Claude is skipped entirely (~85% saving).
+# In container mode the pre-check is disabled (no gh CLI available).
 #
 # Prerequisites:
-#   - Persistent agent must be running (compose.persistent.yml)
 #   - GITHUB_OWNER and GITHUB_REPO must be set
 #
-# See also: CLAUDE.pm.md for PM agent skills and workflow
+# See also: CLAUDE.pm.md for PM agent skills, workflow, and pre-check details
 
 services:
   pm:

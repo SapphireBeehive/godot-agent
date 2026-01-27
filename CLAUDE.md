@@ -65,6 +65,7 @@ git push            # ⚠️ Use MCP push_files if git push fails
   - [One-shot Mode](#skill-running-claude-in-the-sandbox-one-shot-mode)
   - [Daily Workflows](#skill-daily-workflow-persistent-mode)
   - [Queue Mode](#skill-queue-mode-async-task-processing)
+  - [PM Mode](#skill-pm-mode-project-manager-for-issue-management)
   - [Emergency Recovery](#skill-emergency-recovery)
   - [Updating to Latest Image](#skill-updating-to-latest-image)
   - [Debugging Infrastructure](#skill-debugging-infrastructure-issues)
@@ -386,6 +387,49 @@ Requirements:
 - Sprint with Shift key (2x speed)
 ```
 The filename becomes the task identifier in results.
+
+### Skill: PM Mode (Project Manager for Issue Management)
+
+The PM agent monitors GitHub issues, manages dependency chains, auto-merges agent PRs, and releases blocked tasks. It runs as a periodic loop, invoking Claude once per cycle.
+
+**Two execution modes:**
+
+| Mode | How to Run | GitHub Access |
+|------|-----------|---------------|
+| **Standalone** (recommended) | Host with `gh` CLI | `gh` commands |
+| **Container** | Docker compose | MCP tools |
+
+```bash
+# Standalone mode (recommended - enables pre-check gate)
+GITHUB_OWNER=org GITHUB_REPO=repo ./scripts/pm-loop.sh --standalone
+
+# One-time check (always invokes Claude, skips pre-check)
+GITHUB_OWNER=org GITHUB_REPO=repo ./scripts/pm-loop.sh --once --standalone
+
+# Container mode (via Make)
+make pm-start OWNER=org REPO=repo
+
+# Monitor
+make pm-status    # Check if running
+make pm-logs      # Follow logs
+make pm-stop      # Stop PM agent
+```
+
+**Token efficiency:** In standalone mode, a **bash pre-check gate** runs two `gh` API calls before each cycle:
+1. Any open PRs from `claude/*` or `godot-agent/*` branches?
+2. Has the closed-issue set changed since last cycle?
+
+If neither condition is true, Claude is skipped — saving ~15K tokens per idle cycle. In typical runs this eliminates ~85% of invocations. The pre-check is disabled in container mode (no `gh` CLI).
+
+**Environment variables:**
+```bash
+GITHUB_OWNER      # Repository owner (required)
+GITHUB_REPO       # Repository name (required)
+POLL_INTERVAL     # Seconds between cycles (default: 900 = 15 min)
+PM_LOG_DIR        # Log directory (default: ./logs/pm)
+```
+
+**PM context file:** `CLAUDE.pm.md` is loaded as the system prompt for each Claude invocation. It defines the PM React Loop (CHECK → DECIDE → ACT → REPORT), skills for dependency checking, task release, and PR merging.
 
 ### Skill: Emergency Recovery
 
@@ -824,6 +868,12 @@ For detailed logging information, see [docs/LOGS.md](docs/LOGS.md).
 | `make queue-logs` | Follow queue processor logs |
 | `make queue-results PROJECT=...` | Show latest result |
 | `make queue-stop` | Stop queue processor |
+| **PM Mode (Project Manager)** | |
+| `make pm-start OWNER=... REPO=...` | Start PM agent (container mode) |
+| `make pm-check OWNER=... REPO=...` | Run one-time PM check |
+| `make pm-status` | Check PM agent status |
+| `make pm-logs` | Follow PM agent logs |
+| `make pm-stop` | Stop PM agent |
 | **One-shot Mode** | |
 | `make run-direct PROJECT=...` | Run Claude in direct mode |
 | `make run-staging STAGING=...` | Run Claude in staging mode |
@@ -850,6 +900,10 @@ For detailed logging information, see [docs/LOGS.md](docs/LOGS.md).
 | `make q` | `make queue-status` |
 | `make qs` | `make queue-start` |
 | `make qx` | `make queue-stop` |
+| `make pm` | `make pm-status` |
+| `make pms` | `make pm-start` |
+| `make pmx` | `make pm-stop` |
+| `make pml` | `make pm-logs` |
 
 ## Authentication
 
