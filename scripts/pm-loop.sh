@@ -72,6 +72,11 @@ log_error() {
     echo -e "${RED}[$(date '+%Y-%m-%d %H:%M:%S')]${NC} $1"
 }
 
+# Stats
+CYCLES_TOTAL=0
+CYCLES_SKIPPED=0
+CYCLES_INVOKED=0
+
 # Ensure log directory exists
 mkdir -p "$PM_LOG_DIR"
 
@@ -147,8 +152,66 @@ show_banner() {
     echo -e "${CYAN}║${NC}  Logs:        ${PM_LOG_DIR}"
     echo -e "${CYAN}║${NC}  Mode:        $([ "$RUN_ONCE" == "true" ] && echo "One-time check" || echo "Continuous loop")"
     echo -e "${CYAN}║${NC}  Execution:   ${mode}"
+    echo -e "${CYAN}║${NC}  Pre-check:   $([ "$mode" == "standalone" ] && echo "enabled (bash gate)" || echo "disabled (no gh CLI)")"
     echo -e "${CYAN}╚══════════════════════════════════════════════════════════════════════╝${NC}"
     echo ""
+}
+
+# ---------------------------------------------------------------------------
+# Pre-check: lightweight bash gate that decides whether Claude is needed.
+# Two gh API calls (~0 tokens) vs a full Claude invocation (~15K tokens).
+# Returns 0 = action needed (invoke Claude), 1 = idle (skip).
+# ---------------------------------------------------------------------------
+pre_check() {
+    local repo="${GITHUB_OWNER}/${GITHUB_REPO}"
+    local state_file="${PM_LOG_DIR}/.pm_state"
+
+    # Pre-check requires gh CLI — only works in standalone mode.
+    # In container/docker-exec modes, fall through and always invoke Claude.
+    local mode
+    mode=$(detect_mode)
+    if [[ "$mode" != "standalone" ]]; then
+        return 0
+    fi
+
+    # --- Check 1: Any open PRs from agent branches? ---
+    local agent_pr_count
+    agent_pr_count=$(gh pr list --repo "$repo" --state open \
+        --json headRefName \
+        --jq '[.[] | select(.headRefName | test("^(claude|godot-agent)/"))] | length' 2>/dev/null || echo "0")
+
+    if [[ "$agent_pr_count" -gt 0 ]]; then
+        log_info "Pre-check: ${agent_pr_count} open agent PR(s) — invoking Claude"
+        return 0
+    fi
+
+    # --- Check 2: Has the set of closed issues changed since last cycle? ---
+    # If an issue closed since we last looked, a dependency chain may have
+    # unblocked.  Comparing a hash of closed-issue numbers is cheap.
+    local current_closed
+    current_closed=$(gh issue list --repo "$repo" --state closed \
+        --json number -L 200 \
+        --jq '[.[].number] | sort | join(",")' 2>/dev/null || echo "")
+
+    local current_hash
+    current_hash=$(echo "$current_closed" | shasum | cut -d' ' -f1)
+
+    local prev_hash=""
+    if [[ -f "$state_file" ]]; then
+        prev_hash=$(cat "$state_file" 2>/dev/null || echo "")
+    fi
+
+    # Persist current state for next cycle
+    echo "$current_hash" > "$state_file" 2>/dev/null || true
+
+    if [[ "$current_hash" != "$prev_hash" ]]; then
+        log_info "Pre-check: Closed-issue set changed — invoking Claude"
+        return 0
+    fi
+
+    # --- Nothing actionable ---
+    log_info "Pre-check: No agent PRs, no state changes — skipping Claude (saved ~15K tokens)"
+    return 1
 }
 
 run_pm_check() {
@@ -276,6 +339,13 @@ run_pm_check() {
 shutdown() {
     echo ""
     log_info "Shutting down PM loop..."
+    if [[ $CYCLES_TOTAL -gt 0 ]]; then
+        local pct_skipped=0
+        if [[ $CYCLES_TOTAL -gt 0 ]]; then
+            pct_skipped=$(( CYCLES_SKIPPED * 100 / CYCLES_TOTAL ))
+        fi
+        log_info "Final stats: ${CYCLES_INVOKED} invoked / ${CYCLES_SKIPPED} skipped / ${CYCLES_TOTAL} total (${pct_skipped}% saved)"
+    fi
     exit 0
 }
 trap shutdown SIGINT SIGTERM
@@ -315,8 +385,15 @@ main() {
     sleep 10
 
     while true; do
-        run_pm_check || true  # Don't exit loop on error
+        CYCLES_TOTAL=$((CYCLES_TOTAL + 1))
+        if pre_check; then
+            CYCLES_INVOKED=$((CYCLES_INVOKED + 1))
+            run_pm_check || true  # Don't exit loop on error
+        else
+            CYCLES_SKIPPED=$((CYCLES_SKIPPED + 1))
+        fi
 
+        log_info "Stats: ${CYCLES_INVOKED} invoked / ${CYCLES_SKIPPED} skipped / ${CYCLES_TOTAL} total"
         log_info "Next check in ${POLL_INTERVAL}s..."
         sleep "$POLL_INTERVAL"
     done
