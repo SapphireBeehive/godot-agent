@@ -93,6 +93,7 @@ IMPORTANT:
 - A dependency is satisfied when its issue is CLOSED (state=closed), NOT when it has a label.
 - Merge PRs BEFORE releasing tasks - merging closes linked issues which may unblock dependent tasks.
 - Only merge PRs from agent branches (claude/* or godot-agent/*).
+- Before merging, check for Copilot review comments. If present, create a follow-up issue for the feedback, then merge.
 - Use gh CLI for all GitHub operations (standalone mode).
 
 Use the skills defined in your context (CLAUDE.pm.md) to accomplish this.

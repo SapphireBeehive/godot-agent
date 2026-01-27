@@ -382,11 +382,49 @@ Scan for open pull requests created by agent workers and merge them if checks pa
       - `statusCheckRollup` should be empty or all entries have `conclusion: "SUCCESS"`
       - If checks are PENDING -> SKIP (wait for next cycle)
       - If checks FAILED -> Flag in report (needs attention)
-   c. **Issue link**: Body contains `Closes #N` or `Fixes #N`
+   c. **Copilot review**: Check for unresolved Copilot review comments (see below)
+      - If unresolved comments exist -> BLOCK merge, create follow-up issue
+   d. **Issue link**: Body contains `Closes #N` or `Fixes #N`
       - Extract the linked issue number
 
-3. For PRs that pass all checks:
-   a. Add a comment: `"PM: Auto-merging — all checks passed."`
+3. **Check Copilot review comments** (REQUIRED before merge):
+   ```bash
+   # Standalone mode — fetch PR review comments:
+   gh api repos/OWNER/REPO/pulls/N/comments \
+     --jq '[.[] | select(.user.login == "Copilot" or (.user.login | test("copilot"; "i")))] | length'
+   ```
+   - If the count is > 0, the PR has unresolved Copilot suggestions
+   - **DO NOT MERGE** — instead:
+     a. Add a comment: `"PM: Merge blocked — N unresolved Copilot review comments. Creating follow-up issue."`
+     b. Create a new GitHub issue to address the Copilot feedback:
+        ```bash
+        gh issue create --repo OWNER/REPO \
+          --title "fix: Address Copilot review feedback from PR #N" \
+          --body "$(cat <<ISSUE_EOF
+        \`\`\`yaml
+        agent_task: true
+        depends_on: []
+        \`\`\`
+
+        ## Context
+        PR #N was merged but has unresolved Copilot review suggestions that should be addressed.
+
+        ## Copilot Suggestions
+        Review the comments at: https://github.com/OWNER/REPO/pull/N
+
+        ## Task
+        1. Read all Copilot review comments on PR #N
+        2. Apply each suggestion (or document why it was skipped)
+        3. Validate with \`godot --headless --validate-project\`
+        4. Commit and create PR with \`Closes #THIS_ISSUE\`
+        ISSUE_EOF
+        )"
+        ```
+     c. Add `agent-ready` label to the new issue so a worker picks it up
+     d. **THEN merge the original PR** (don't block indefinitely — the follow-up issue tracks the debt)
+
+4. For PRs that pass ALL checks (CI + no Copilot comments):
+   a. Add a comment: `"PM: Auto-merging — all checks passed, no unresolved reviews."`
    b. Squash-merge:
       ```bash
       # Standalone mode:
@@ -394,8 +432,9 @@ Scan for open pull requests created by agent workers and merge them if checks pa
       ```
    c. Verify the linked issue auto-closed
 
-4. Report:
+5. Report:
    - PRs merged (list with linked issue numbers)
+   - PRs merged with follow-up issues (Copilot feedback deferred)
    - PRs skipped (pending checks, not an agent PR)
    - PRs with failed checks (need attention)
 
