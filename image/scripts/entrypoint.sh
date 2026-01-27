@@ -105,7 +105,8 @@ fi
 # Isolated Mode: Auto-clone repository
 # ============================================
 # If GITHUB_REPO is set and /project is empty, clone the repository
-if [[ -n "${GITHUB_REPO:-}" ]]; then
+# Skip if NO_CLONE=1 (used by PM agent which only needs MCP tools)
+if [[ -n "${GITHUB_REPO:-}" ]] && [[ "${NO_CLONE:-}" != "1" ]]; then
     # Check if /project is empty (or only has lost+found from ext4 volume)
     # Count files in /project excluding lost+found
     file_count=0

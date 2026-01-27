@@ -13,6 +13,7 @@
         claude claude-print claude-shell agent-status verify-permissions \
         queue-start queue-stop queue-status queue-logs queue-add queue-init queue-results \
         pool-start pool-stop pool-status pool-logs pool-scale \
+        pm-start pm-stop pm-status pm-logs pm-check \
         github-app-test github-app-validate
 
 # Default target
@@ -165,6 +166,8 @@ validate: ## Validate compose configuration
 		echo "✓ compose.queue.yml is valid"
 	@cd $(COMPOSE_DIR) && docker compose -f compose.base.yml -f compose.pool.yml config --quiet && \
 		echo "✓ compose.pool.yml is valid"
+	@cd $(COMPOSE_DIR) && docker compose -f compose.base.yml -f compose.pm.yml config --quiet && \
+		echo "✓ compose.pm.yml is valid"
 	@cd $(COMPOSE_DIR) && docker compose -f compose.offline.yml config --quiet && \
 		echo "✓ compose.offline.yml is valid"
 	@echo "All compose files valid!"
@@ -456,6 +459,69 @@ pool-scale: _check-auth ## Scale worker pool (WORKERS=N)
 	@echo "Scaling worker pool to $(WORKERS) workers..."
 	@cd $(COMPOSE_DIR) && docker compose --env-file ../.env -f compose.base.yml -f compose.pool.yml up -d --scale worker=$(WORKERS)
 	@echo "Pool scaled to $(WORKERS) workers."
+
+#==============================================================================
+# PM MODE (Project Manager for GitHub issue management)
+#==============================================================================
+
+PM_POLL_INTERVAL ?= 900
+
+pm-start: _check-auth ## Start PM agent (OWNER=org REPO=repo)
+ifndef OWNER
+	@echo "Error: OWNER is required"
+	@echo "Usage: make pm-start OWNER=johnrdd REPO=godot-agent"
+	@exit 1
+endif
+ifndef REPO
+	@echo "Error: REPO is required"
+	@echo "Usage: make pm-start OWNER=johnrdd REPO=godot-agent"
+	@exit 1
+endif
+	@echo "Starting infrastructure services..."
+	@./$(SCRIPT_DIR)/up.sh
+	@echo ""
+	@echo "Starting PM agent..."
+	@cd $(COMPOSE_DIR) && GITHUB_OWNER=$(OWNER) GITHUB_REPO=$(REPO) PM_POLL_INTERVAL=$(PM_POLL_INTERVAL) \
+		docker compose --env-file ../.env -f compose.base.yml -f compose.pm.yml up -d pm
+	@echo ""
+	@echo "PM agent running!"
+	@echo "  Repository: $(OWNER)/$(REPO)"
+	@echo "  Poll interval: $(PM_POLL_INTERVAL)s"
+	@echo ""
+	@echo "Commands:"
+	@echo "  make pm-status              - Check PM agent status"
+	@echo "  make pm-logs                - View PM agent logs"
+	@echo "  make pm-stop                - Stop PM agent"
+
+pm-stop: ## Stop PM agent
+	@echo "Stopping PM agent..."
+	@cd $(COMPOSE_DIR) && docker compose --env-file ../.env -f compose.base.yml -f compose.pm.yml down
+	@echo "PM agent stopped."
+
+pm-status: ## Show PM agent status
+	@if docker ps --format '{{.Names}}' 2>/dev/null | grep -q '^pm$$'; then \
+		echo "PM agent: RUNNING"; \
+		echo "  Uptime: $$(docker ps --format '{{.Status}}' --filter name=pm)"; \
+	else \
+		echo "PM agent: NOT RUNNING"; \
+		echo "  Start with: make pm-start OWNER=org REPO=repo"; \
+	fi
+
+pm-logs: ## View PM agent logs
+	@docker logs -f pm 2>/dev/null || echo "PM agent is not running"
+
+pm-check: _check-auth ## Run one-time PM check (OWNER=org REPO=repo)
+ifndef OWNER
+	@echo "Error: OWNER is required"
+	@echo "Usage: make pm-check OWNER=johnrdd REPO=godot-agent"
+	@exit 1
+endif
+ifndef REPO
+	@echo "Error: REPO is required"
+	@echo "Usage: make pm-check OWNER=johnrdd REPO=godot-agent"
+	@exit 1
+endif
+	@GITHUB_OWNER=$(OWNER) GITHUB_REPO=$(REPO) ./$(SCRIPT_DIR)/pm-loop.sh --once
 
 #==============================================================================
 # GODOT OPERATIONS
@@ -750,6 +816,10 @@ p: pool-status
 ps: pool-start
 px: pool-stop
 pl: pool-logs
+pm: pm-status
+pms: pm-start
+pmx: pm-stop
+pml: pm-logs
 
 # Print configuration
 config: ## Show current configuration

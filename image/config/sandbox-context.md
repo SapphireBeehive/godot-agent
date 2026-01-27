@@ -585,6 +585,10 @@ Use list_issues:
 │                                                              │
 │  5. UPDATE your comment if you won                           │
 │     → Change to friendly "I'm working on this" message      │
+│                                                              │
+│  6. ADD in-progress LABEL                                    │
+│     → This signals to PM that work is underway              │
+│     → Use update_issue to add "in-progress" to labels       │
 └──────────────────────────────────────────────────────────────┘
 ```
 
@@ -617,6 +621,13 @@ Use update_issue_comment:
   - repo: repo
   - comment_id: <your claim comment id>
   - body: "🤖 I claimed this issue and am now working on it."
+
+# Step 6: Add in-progress label to signal PM
+Use update_issue:
+  - owner: owner
+  - repo: repo
+  - issue_number: N
+  - labels: ["in-progress", ...existing_labels]  # Keep existing labels, add in-progress
 ```
 
 **Why this works:**
@@ -678,25 +689,28 @@ Push your branch and create a pull request:
 Use create_pull_request:
   - owner: owner
   - repo: repo
-  - title: "fix: add player dash ability (closes #42)"
+  - title: "fix: add player dash ability (#42)"
   - body: |
       ## Summary
       Implemented player dash ability per issue #42.
-      
+
       ## Changes
       - Added dash mechanic to player.gd
       - Added cooldown system
-      
+
       ## Testing
       - Added test_player_dash() to test_runner.gd
       - All tests pass
-      
+
       Closes #42
   - head: godot-agent/issue-42-add-player-dash
   - base: main
 ```
 
-**Include "Closes #N" in the PR body** to link it to the issue.
+**CRITICAL: Include "Closes #N" in the PR body.**
+- This auto-closes the issue when the PR is merged
+- The PM detects completion by checking if issues are CLOSED
+- Without "Closes #N", the PM won't know the work is done
 
 ### Step 7: Release the Issue
 
@@ -709,19 +723,25 @@ Use create_issue_comment:
   - issue_number: N
   - body: |
       🤖 I've completed my work on this issue and created PR #XX.
-      
+
       Releasing this issue - ready for human review.
-      
+
       PR: #XX
 ```
+
+**IMPORTANT: Your PR body MUST include "Closes #N"** (where N is the issue number).
+This auto-closes the issue when the PR is merged, which signals completion to the PM.
 
 ⛔ **NEVER merge your own pull request.**
 ⛔ **NEVER close the issue yourself.**
 
 A human will:
 1. Review your code
-2. Request changes if needed (see Step 8)
-3. Merge the PR (which auto-closes the issue)
+2. Request changes if needed (see Step 9)
+3. Merge the PR (which auto-closes the issue via "Closes #N")
+
+**The PM detects completion by checking if the issue is CLOSED**, not by looking for labels.
+When your PR is merged and the issue auto-closes, the PM will release any dependent issues.
 
 ### Step 8: Continuous Workflow Loop
 
@@ -846,13 +866,14 @@ Look for issues where:
 | Create new issue | `create_issue` | Queue (if needed) |
 | List open issues | `list_issues` | Issue |
 | Read issue details | `get_issue` | Issue, Queue |
-| Claim issue | `create_issue_comment` | Issue, Queue |
+| Claim issue (comment) | `create_issue_comment` | Issue, Queue |
+| **Add in-progress label** | `update_issue` (add label) | Issue, Queue |
 | Create branch | `git checkout -b` | All modes |
 | Code + write tests | — | All modes |
 | Validate project | `godot --headless --validate-project` | All modes |
 | Run tests | `godot --headless -s res://tests/test_runner.gd` | All modes |
 | Push changes | `push_files` or git push | All modes |
-| Create PR | `create_pull_request` | Issue, Queue (required) / Prompt (optional) |
+| Create PR (with "Closes #N") | `create_pull_request` | Issue, Queue (required) / Prompt (optional) |
 | **Release issue** | `create_issue_comment` | Issue, Queue |
 | **Check for feedback** | `list_issues`, review comments | Issue, Queue |
 | **Address feedback** | Edit code, push to same branch | Issue, Queue |
@@ -1556,6 +1577,7 @@ This section documents critical issues encountered and their solutions. Learn fr
 2. Wait 3 seconds for other claims to arrive
 3. Fetch all comments and sort by server timestamp
 4. Only the first CLAIM comment wins—all others must skip the issue
+5. Winner adds `in-progress` label to signal PM
 
 **Verification:** When you post a claim, always verify you were first before proceeding:
 ```
@@ -1564,11 +1586,33 @@ This section documents critical issues encountered and their solutions. Learn fr
 3. List all comments on the issue
 4. Filter for CLAIM: prefix
 5. Sort by created_at
-6. If yours is first → proceed
+6. If yours is first → proceed, add in-progress label
 7. If yours is NOT first → skip, find another issue
 ```
 
 **See:** [Step 2: Claim the Issue](#step-2-claim-the-issue-atomic-claim-verification) for detailed workflow.
+
+### Issue: PM and Worker State Alignment
+
+**Problem:** PM couldn't detect when workers claimed or completed issues.
+
+**Root Cause:** PM expected labels, workers only used comments.
+
+**Solution:** Clear state model with aligned responsibilities:
+```
+State          | How Detected        | Who Sets It
+---------------|---------------------|------------------
+On Hold        | No agent-ready      | Initial state
+Ready          | Has agent-ready     | PM adds label
+In Progress    | Has in-progress     | Worker adds label
+Completed      | Issue is CLOSED     | PR merge auto-closes
+```
+
+**Key points:**
+- Worker adds `in-progress` label after claiming
+- Worker includes "Closes #N" in PR body
+- PR merge auto-closes issue → PM detects completion
+- PM releases dependent issues when deps are CLOSED
 
 ---
 

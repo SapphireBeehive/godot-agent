@@ -1,0 +1,98 @@
+# compose.pm.yml - Project Manager agent for GitHub issue management
+# Use with: docker compose -f compose.base.yml -f compose.persistent.yml -f compose.pm.yml up -d
+#
+# The PM agent periodically checks GitHub issues, manages dependencies,
+# and releases blocked tasks when their dependencies are satisfied.
+#
+# Prerequisites:
+#   - Persistent agent must be running (compose.persistent.yml)
+#   - GITHUB_OWNER and GITHUB_REPO must be set
+#
+# See also: CLAUDE.pm.md for PM agent skills and workflow
+
+services:
+  pm:
+    image: claude-godot-agent:latest
+    container_name: pm
+    stdin_open: false
+    tty: false
+
+    # Run the PM loop script
+    command: ["bash", "/opt/scripts/pm-loop.sh"]
+    restart: unless-stopped
+
+    # Environment - authentication and GitHub config
+    environment:
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+      - CLAUDE_CODE_OAUTH_TOKEN=${CLAUDE_CODE_OAUTH_TOKEN:-}
+      # GitHub App authentication
+      - GITHUB_APP_ID=${GITHUB_APP_ID:-}
+      - GITHUB_APP_INSTALLATION_ID=${GITHUB_APP_INSTALLATION_ID:-}
+      - GITHUB_APP_PRIVATE_KEY=${GITHUB_APP_PRIVATE_KEY:-}
+      - GITHUB_APP_PRIVATE_KEY_PATH=${GITHUB_APP_PRIVATE_KEY_PATH:-}
+      # Target repository (required at runtime, validated by pm-loop.sh)
+      - GITHUB_OWNER=${GITHUB_OWNER:-}
+      - GITHUB_REPO=${GITHUB_REPO:-}
+      # Skip clone - PM uses MCP tools, doesn't need local repo
+      - NO_CLONE=1
+      # PM loop configuration
+      - POLL_INTERVAL=${PM_POLL_INTERVAL:-900}
+      - PM_LOG_DIR=/var/log/pm
+      - HOME=/home/claude
+      - USER=claude
+
+    # Network: sandbox only, use dnsfilter for DNS
+    networks:
+      sandbox_net:
+        ipv4_address: 10.100.1.101
+    dns:
+      - 10.100.1.2  # dnsfilter
+
+    # Volumes
+    volumes:
+      - ../CLAUDE.pm.md:/etc/claude/CLAUDE.pm.md:ro
+      - ../scripts/pm-loop.sh:/opt/scripts/pm-loop.sh:ro
+      - ../secrets:/secrets:ro
+      - pm_logs:/var/log/pm
+
+    # Security hardening
+    read_only: true
+    tmpfs:
+      - /tmp:size=100M,mode=1777
+      - /home/claude:size=50M,mode=0755,uid=1000,gid=1000
+      - /project:size=100M,mode=0755,uid=1000,gid=1000
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+
+    # Resource limits (lower than worker agent)
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+          cpus: "1.0"
+          pids: 128
+        reservations:
+          memory: 256M
+
+    # Depends on infrastructure services
+    depends_on:
+      dnsfilter:
+        condition: service_started
+      proxy_github:
+        condition: service_started
+      proxy_anthropic_api:
+        condition: service_started
+
+    # Working directory
+    working_dir: /home/claude
+
+volumes:
+  pm_logs:
+    name: claude-godot-pm-logs
+
+networks:
+  sandbox_net:
+    external: true
+    name: claude-godot-sandbox_sandbox_net
